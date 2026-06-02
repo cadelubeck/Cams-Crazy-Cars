@@ -672,7 +672,8 @@ function resetGame() {
 // ==============================
 let renderer, scene, camera, cameraLookAt;
 let trackMeshGroup, groundMesh, skyMesh;
-let treeObstacles = []; // {x, z, r} — populated by addTrees for grass/water arenas
+let treeObstacles = []; // {x, z, r, label?} — collidable obstacles (trees, rocks)
+let jumpZones = [];    // {x, z, r, boost} — ramps that send cars airborne
 let raceActive = false;
 let raceTimer = 0;
 let raceLaps = 3;
@@ -775,6 +776,8 @@ class CarEntity {
     this.lapStart = 0;
     this.crashes = 0;
     this.stuckTimer = 0;
+    this.airY = 0;
+    this.airVY = 0;
 
     // AI
     this.aiLookahead = 0.18;
@@ -904,8 +907,24 @@ class CarEntity {
       this.speedPenalty = Math.min(1, this.speedPenalty + dt * 0.1);
     }
 
+    // Jump zones
+    if (jumpZones.length > 0 && this.airY <= 0) {
+      for (const jz of jumpZones) {
+        const dx = this.x - jz.x, dz = this.z - jz.z;
+        if (dx*dx + dz*dz < jz.r * jz.r && this.speed > 1) {
+          this.airVY = jz.boost * Math.min(this.speed / 8, 1);
+          break;
+        }
+      }
+    }
+    if (this.airVY !== 0 || this.airY > 0) {
+      this.airVY -= 28 * dt;
+      this.airY = Math.max(0, this.airY + this.airVY * dt);
+      if (this.airY === 0) this.airVY = 0;
+    }
+
     // Update 3D mesh
-    this.mesh.position.set(this.x, 0.5, this.z);
+    this.mesh.position.set(this.x, 0.5 + this.airY, this.z);
     this.mesh.rotation.y = this.heading;
     // Spin wheels
     const wheelSpin = this.speed * dt * 2;
@@ -986,7 +1005,23 @@ class CarEntity {
     if (this.damageCooldown > 0) this.damageCooldown -= dt;
     if (this.speedPenalty < 1) this.speedPenalty = Math.min(1, this.speedPenalty + dt * 0.1);
 
-    this.mesh.position.set(this.x, 0.5, this.z);
+    // AI jump zones (simple arc, no input check needed)
+    if (jumpZones.length > 0 && this.airY <= 0) {
+      for (const jz of jumpZones) {
+        const dx = this.x - jz.x, dz = this.z - jz.z;
+        if (dx*dx + dz*dz < jz.r * jz.r && this.speed > 1) {
+          this.airVY = jz.boost * Math.min(this.speed / 8, 1);
+          break;
+        }
+      }
+    }
+    if (this.airVY !== 0 || this.airY > 0) {
+      this.airVY -= 28 * dt;
+      this.airY = Math.max(0, this.airY + this.airVY * dt);
+      if (this.airY === 0) this.airVY = 0;
+    }
+
+    this.mesh.position.set(this.x, 0.5 + this.airY, this.z);
     this.mesh.rotation.y = this.heading;
     this.wheels.forEach(w => w.rotation.x += this.speed * dt * 2);
 
@@ -1191,6 +1226,7 @@ function initThreeJS() {
 
 function buildScene(arenaIdx) {
   treeObstacles = [];
+  jumpZones = [];
   // Clear previous objects
   const toRemove = [];
   scene.traverse(obj => {
@@ -1641,7 +1677,7 @@ function addTrees(arenaIdx) {
       leaves.castShadow = true;
       scene.add(leaves);
     }
-    if (isObstacle) treeObstacles.push({x, z, r: 2.8});
+    if (isObstacle) treeObstacles.push({x, z, r: 5.0});
   }
 
   // Background decorative trees
@@ -1654,41 +1690,67 @@ function addTrees(arenaIdx) {
     if (dist > TRACK_WIDTH/2 + 15) placeTree(x, z, 5 + rng()*8, false);
   }
 
-  // Obstacle trees along track edges for grass (0), water (2), mud (3)
+  // Obstacle trees ON the road for grass (0), water (2), mud (3)
   const isObstacleArena = arenaIdx === 0 || arenaIdx === 2 || arenaIdx === 3;
   if (isObstacleArena) {
     const rng2 = mulberry32(77777);
-    const count = arenaIdx === 3 ? 18 : 24; // fewer trees in mud (rocks fill the role)
+    const count = arenaIdx === 3 ? 14 : 20;
     for (let i = 0; i < count; i++) {
-      const t = (i / count) * Math.PI * 2 + rng2() * 0.18;
+      const t = (i / count) * Math.PI * 2 + rng2() * 0.25;
       const pt = trackPoint(t);
       const tang = trackTangent(t);
-      const perp = new THREE.Vector3(-tang.z, 0, tang.x);
-      // Alternate inner/outer edge, offset 4-10 units outside road edge
-      const side = (rng2() > 0.5 ? 1 : -1) * (TRACK_WIDTH/2 + 4 + rng2()*6);
-      const x = pt.x + perp.x * side;
-      const z = pt.z + perp.z * side;
+      const px = -tang.z, pz = tang.x; // perpendicular (unit)
+      // Place within road: 15–30 units from centre (road half-width = 36)
+      const side = (rng2() > 0.5 ? 1 : -1) * (15 + rng2() * 15);
+      const x = pt.x + px * side;
+      const z = pt.z + pz * side;
       placeTree(x, z, 6 + rng2()*5, true);
     }
   }
 }
 
 function addSandDunes() {
-  const mat = new THREE.MeshLambertMaterial({color:0xd4a017});
-  for (let i=0;i<20;i++) {
-    const angle = Math.random()*Math.PI*2;
-    const rad = 150+Math.random()*250;
-    const x = Math.cos(angle)*rad;
-    const z = Math.sin(angle)*rad;
-    const {dist} = nearestTrackT(x,z,0);
-    if (dist < TRACK_WIDTH/2+20) continue;
-    const dune = new THREE.Mesh(
-      new THREE.SphereGeometry(10+Math.random()*15, 8, 6),
-      mat
-    );
+  const rng = mulberry32(31337);
+  const duneMat = new THREE.MeshLambertMaterial({color:0xc8960c});
+  const rampMat = new THREE.MeshLambertMaterial({color:0xe0a820});
+
+  // Background dunes off track (decorative)
+  for (let i = 0; i < 18; i++) {
+    const angle = rng() * Math.PI * 2;
+    const rad = 150 + rng() * 250;
+    const x = Math.cos(angle) * rad;
+    const z = Math.sin(angle) * rad;
+    const {dist} = nearestTrackT(x, z, 0);
+    if (dist < TRACK_WIDTH/2 + 20) continue;
+    const dune = new THREE.Mesh(new THREE.SphereGeometry(10 + rng()*15, 8, 6), duneMat);
     dune.position.set(x, -3, z);
-    dune.userData.sceneObj=true;
+    dune.userData.sceneObj = true;
     scene.add(dune);
+  }
+
+  // Jump hills ON the track — ramp shape, trigger airborne effect
+  const hillCount = 6;
+  for (let i = 0; i < hillCount; i++) {
+    const t = (i / hillCount) * Math.PI * 2 + 0.4 + rng() * 0.3;
+    const pt = trackPoint(t);
+    const tang = trackTangent(t);
+    const px = -tang.z, pz = tang.x;
+    // Span across the road so you can't easily avoid
+    const hillW = TRACK_WIDTH * 0.55;
+    const hillH = 5 + rng() * 4;
+    const hillD = 18 + rng() * 10;
+    // Ramp mesh (wedge-like box, taller at back)
+    const hill = new THREE.Mesh(new THREE.BoxGeometry(hillW, hillH, hillD), rampMat);
+    hill.position.set(pt.x, hillH * 0.4, pt.z);
+    const ang = Math.atan2(tang.x, tang.z);
+    hill.rotation.y = ang;
+    // Tilt forward like a ramp
+    hill.rotation.x = -0.22;
+    hill.userData.sceneObj = true;
+    hill.castShadow = true;
+    scene.add(hill);
+    // Register as jump zone
+    jumpZones.push({x: pt.x, z: pt.z, r: hillD * 0.65, boost: 18 + hillH * 1.5});
   }
 }
 
