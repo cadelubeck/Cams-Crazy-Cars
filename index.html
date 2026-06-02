@@ -672,6 +672,7 @@ function resetGame() {
 // ==============================
 let renderer, scene, camera, cameraLookAt;
 let trackMeshGroup, groundMesh, skyMesh;
+let treeObstacles = []; // {x, z, r} — populated by addTrees for grass/water arenas
 let raceActive = false;
 let raceTimer = 0;
 let raceLaps = 3;
@@ -852,6 +853,26 @@ class CarEntity {
       }
     }
 
+    // Tree / rock obstacle collision
+    if (treeObstacles.length > 0 && this.damageCooldown <= 0) {
+      for (const obs of treeObstacles) {
+        const dx = this.x - obs.x, dz = this.z - obs.z;
+        const d2 = dx*dx + dz*dz;
+        if (d2 < obs.r * obs.r) {
+          const d = Math.sqrt(d2) || 0.01;
+          this.x = obs.x + (dx/d) * obs.r;
+          this.z = obs.z + (dz/d) * obs.r;
+          this.speed *= -0.3; // bounce
+          this.takeDamage(1);
+          if (this.isPlayer) {
+            const label = obs.label === 'rock' ? 'Rock hit! 🪨' : 'Tree hit! 🌲';
+            notify(label, 'bad');
+          }
+          break;
+        }
+      }
+    }
+
     // Lap progress (continuous angle tracking)
     let delta = t - prevT;
     if (delta < -Math.PI) delta += Math.PI * 2;
@@ -928,6 +949,22 @@ class CarEntity {
     // Wall damage for AI
     if (dist > TRACK_WIDTH / 2 + 8 && this.speed > 2 && this.damageCooldown <= 0) {
       this.takeDamage(1);
+    }
+
+    // Tree / rock obstacle collision for AI
+    if (treeObstacles.length > 0 && this.damageCooldown <= 0) {
+      for (const obs of treeObstacles) {
+        const dx = this.x - obs.x, dz = this.z - obs.z;
+        const d2 = dx*dx + dz*dz;
+        if (d2 < obs.r * obs.r) {
+          const d = Math.sqrt(d2) || 0.01;
+          this.x = obs.x + (dx/d) * obs.r;
+          this.z = obs.z + (dz/d) * obs.r;
+          this.speed *= -0.25;
+          this.takeDamage(1);
+          break;
+        }
+      }
     }
 
     let delta = t - prevT;
@@ -1153,6 +1190,7 @@ function initThreeJS() {
 }
 
 function buildScene(arenaIdx) {
+  treeObstacles = [];
   // Clear previous objects
   const toRemove = [];
   scene.traverse(obj => {
@@ -1177,8 +1215,8 @@ function buildScene(arenaIdx) {
   buildRoad(arenaIdx);
   addCurbsAndBarriers(arenaIdx);
 
-  // Trees
-  addTrees(arenaIdx);
+  // Trees (not on asphalt — clean circuit, no obstacles)
+  if (arenaIdx !== 4) addTrees(arenaIdx);
 
   // Start/finish line
   addStartFinish();
@@ -1583,37 +1621,56 @@ function addGrandstands() {
 }
 
 function addTrees(arenaIdx) {
-  const treePositions = [];
   const rng = mulberry32(12345);
-  for (let i=0;i<80;i++) {
-    const angle = rng()*Math.PI*2;
-    const rad = 120 + rng()*380;
-    const x = Math.cos(angle)*rad;
-    const z = Math.sin(angle)*rad;
-    // Check not on track
-    const {dist} = nearestTrackT(x, z, 0);
-    if (dist > TRACK_WIDTH/2+15) treePositions.push({x,z});
+  const trunkMat = new THREE.MeshLambertMaterial({color:arenaIdx===1?0xc2a46e:0x5d4037});
+  const leafMat  = new THREE.MeshLambertMaterial({color:arenaIdx===1?0xc2a46e:0x2d7a3a});
+
+  function placeTree(x, z, h, isObstacle) {
+    const trunkR = isObstacle ? 1.2 : 0.5;
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(trunkR*0.7, trunkR, h, 7), trunkMat);
+    trunk.position.set(x, h/2, z);
+    trunk.userData.sceneObj = true;
+    trunk.castShadow = true;
+    scene.add(trunk);
+    if (arenaIdx !== 1) {
+      const lr = isObstacle ? 3.5 : 2.5 + Math.random()*1.5;
+      const lh = isObstacle ? 5 : 4 + Math.random()*3;
+      const leaves = new THREE.Mesh(new THREE.ConeGeometry(lr, lh, 7), leafMat);
+      leaves.position.set(x, h + (isObstacle ? 2.5 : 2), z);
+      leaves.userData.sceneObj = true;
+      leaves.castShadow = true;
+      scene.add(leaves);
+    }
+    if (isObstacle) treeObstacles.push({x, z, r: 2.8});
   }
 
-  const trunkMat = new THREE.MeshLambertMaterial({color:arenaIdx===1?0xc2a46e:0x5d4037});
-  const leafMat = new THREE.MeshLambertMaterial({color:arenaIdx===1?0xc2a46e:0x2d7a3a});
+  // Background decorative trees
+  for (let i = 0; i < 80; i++) {
+    const angle = rng() * Math.PI * 2;
+    const rad = 120 + rng() * 380;
+    const x = Math.cos(angle) * rad;
+    const z = Math.sin(angle) * rad;
+    const {dist} = nearestTrackT(x, z, 0);
+    if (dist > TRACK_WIDTH/2 + 15) placeTree(x, z, 5 + rng()*8, false);
+  }
 
-  treePositions.forEach(tp => {
-    const h = 5+Math.random()*8;
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.5,h,7), trunkMat);
-    trunk.position.set(tp.x, h/2, tp.z);
-    trunk.userData.sceneObj=true;
-    scene.add(trunk);
-    trunk.castShadow=true;
-
-    if (arenaIdx !== 1) {
-      const leaves = new THREE.Mesh(new THREE.ConeGeometry(2.5+Math.random()*1.5,4+Math.random()*3,7), leafMat);
-      leaves.position.set(tp.x, h+2, tp.z);
-      leaves.userData.sceneObj=true;
-      scene.add(leaves);
-      leaves.castShadow=true;
+  // Obstacle trees along track edges for grass (0), water (2), mud (3)
+  const isObstacleArena = arenaIdx === 0 || arenaIdx === 2 || arenaIdx === 3;
+  if (isObstacleArena) {
+    const rng2 = mulberry32(77777);
+    const count = arenaIdx === 3 ? 18 : 24; // fewer trees in mud (rocks fill the role)
+    for (let i = 0; i < count; i++) {
+      const t = (i / count) * Math.PI * 2 + rng2() * 0.18;
+      const pt = trackPoint(t);
+      const tang = trackTangent(t);
+      const perp = new THREE.Vector3(-tang.z, 0, tang.x);
+      // Alternate inner/outer edge, offset 4-10 units outside road edge
+      const side = (rng2() > 0.5 ? 1 : -1) * (TRACK_WIDTH/2 + 4 + rng2()*6);
+      const x = pt.x + perp.x * side;
+      const z = pt.z + perp.z * side;
+      placeTree(x, z, 6 + rng2()*5, true);
     }
-  });
+  }
 }
 
 function addSandDunes() {
@@ -1670,9 +1727,9 @@ function addMudPits() {
     pit.userData.sceneObj = true;
     scene.add(pit);
   }
-  // Scattered rocks / debris chunks for visual interest
+  // Decorative rocks off the track
   const rockMat = new THREE.MeshLambertMaterial({color:0x4a3020});
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 30; i++) {
     const angle = rng() * Math.PI * 2;
     const rad   = 20 + rng() * 280;
     const x = Math.cos(angle) * rad, z = Math.sin(angle) * rad;
@@ -1685,6 +1742,25 @@ function addMudPits() {
     rock.userData.sceneObj = true;
     rock.castShadow = true;
     scene.add(rock);
+  }
+  // Obstacle rocks ON the track edges that cause crashes
+  const rng2 = mulberry32(55555);
+  for (let i = 0; i < 20; i++) {
+    const t = (i / 20) * Math.PI * 2 + rng2() * 0.22;
+    const pt = trackPoint(t);
+    const tang = trackTangent(t);
+    const perp = new THREE.Vector3(-tang.z, 0, tang.x);
+    const side = (rng2() > 0.5 ? 1 : -1) * (TRACK_WIDTH * 0.25 + rng2() * TRACK_WIDTH * 0.2);
+    const x = pt.x + perp.x * side;
+    const z = pt.z + perp.z * side;
+    const r = 2 + rng2() * 2.5;
+    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 0), rockMat);
+    rock.position.set(x, r * 0.5, z);
+    rock.rotation.set(rng2() * Math.PI, rng2() * Math.PI, rng2() * Math.PI);
+    rock.userData.sceneObj = true;
+    rock.castShadow = true;
+    scene.add(rock);
+    treeObstacles.push({x, z, r: r + 1.5, label:'rock'});
   }
 }
 
