@@ -1086,7 +1086,7 @@ function buildCarMesh(vehicleId, colorHex) {
   let bw, bh, bl, cw, ch, cl, cz, wr, ww, fwz, rwz, fwr;
   const S = 1.2; // 20% bigger
   if (cat === 'Tractor') {
-    bw=3.2*S; bh=1.8*S; bl=5.5*S; cw=2.8*S; ch=1.2*S; cl=2.2*S; cz=-0.3*S;
+    bw=3.2*S; bh=1.8*S; bl=5.5*S; cw=2.8*S; ch=1.2*S; cl=2.0*S; cz=1.2*S;
     wr=1.3*S; ww=0.9*S; fwz=1.5*S; rwz=1.8*S; fwr=0.7*S;
   } else if (cat === 'Truck') {
     bw=4.0*S; bh=1.9*S; bl=7.5*S; cw=3.5*S; ch=1.3*S; cl=2.8*S; cz=1.0*S;
@@ -1115,6 +1115,15 @@ function buildCarMesh(vehicleId, colorHex) {
   const bkw = new THREE.Mesh(new THREE.BoxGeometry(cw-0.3, ch-0.25, 0.1), glassMat);
   bkw.position.set(0, bh + ch/2 + (cat==='Tractor' ? 1.1 : wr), cz + cl/2 + 0.05);
   g.add(bkw);
+
+  // Tractor hood (engine block at the front, local -Z side)
+  if (cat === 'Tractor') {
+    const hoodH = bh * 0.55;
+    const hood = new THREE.Mesh(new THREE.BoxGeometry(bw * 0.75, hoodH, bl * 0.4), darkMat);
+    hood.position.set(0, bh + hoodH/2 + 1.1, -bl * 0.28);
+    hood.castShadow = true;
+    g.add(hood);
+  }
 
   // Bumpers
   const fbump = new THREE.Mesh(new THREE.BoxGeometry(bw+0.2, 0.5, 0.4), darkMat);
