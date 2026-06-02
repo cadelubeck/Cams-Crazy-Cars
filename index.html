@@ -2399,11 +2399,13 @@ function initPreviewer() {
 }
 
 function updatePreviewer(vehicleId, colorHex, cosmetics) {
-  if (!initPreviewer()) return;
-  if (prevMesh) { prevScene.remove(prevMesh); prevMesh = null; }
-  prevMesh = buildCarMesh(vehicleId, colorHex || VEHICLES[vehicleId].defaultColor, cosmetics || []);
-  prevMesh.rotation.y = Math.PI; // face camera
-  prevScene.add(prevMesh);
+  try {
+    if (!initPreviewer()) return;
+    if (prevMesh) { prevScene.remove(prevMesh); prevMesh = null; }
+    prevMesh = buildCarMesh(vehicleId, colorHex || VEHICLES[vehicleId].defaultColor, cosmetics || []);
+    prevMesh.rotation.y = Math.PI;
+    prevScene.add(prevMesh);
+  } catch(e) {}
 }
 
 function startPreviewLoop() {
@@ -2761,8 +2763,7 @@ function buildGarage() {
 function tryCosmetic(id) {
   if (triedCosmetics.includes(id)) triedCosmetics = triedCosmetics.filter(x => x !== id);
   else triedCosmetics.push(id);
-  refreshGaragePreview();
-  buildGarage();
+  buildGarage(); // rebuilds UI + calls refreshGaragePreview at end
 }
 
 function buyCosmetic(id, cost) {
@@ -2772,17 +2773,20 @@ function buyCosmetic(id, cost) {
   triedCosmetics = triedCosmetics.filter(x => x !== id);
   updateTopBar(); saveGame();
   notify(`${COSMETICS.find(c => c.id === id).name} equipped! -${cost} 🪙`, 'good');
-  refreshGaragePreview();
   buildGarage();
 }
 
 function refreshGaragePreview() {
-  const vid = G.currentVehicle;
-  const color = G.vehicleColors[vid] || VEHICLES[vid].defaultColor;
-  const owned = getVehicleCosmetics(vid);
-  const allCosmetics = [...owned, ...triedCosmetics.filter(id => !owned.includes(id))];
-  updatePreviewer(vid, color, allCosmetics);
-  startPreviewLoop();
+  try {
+    const vid = G.currentVehicle;
+    const color = G.vehicleColors[vid] || VEHICLES[vid].defaultColor;
+    const owned = getVehicleCosmetics(vid);
+    const allCosmetics = [...owned, ...triedCosmetics.filter(id => !owned.includes(id))];
+    updatePreviewer(vid, color, allCosmetics);
+    startPreviewLoop();
+  } catch(e) {
+    // preview failure must not block UI
+  }
 }
 
 function buyUpgrade(id) {
