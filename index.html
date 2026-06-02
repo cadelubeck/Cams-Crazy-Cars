@@ -2747,42 +2747,40 @@ function buildGarage() {
       item.innerHTML = `
         <div class="cosm-item-top">${co.emoji} ${co.name}<span class="cosm-item-price">${co.cost} 🪙</span></div>
         <div class="cosm-actions">
-          <button class="cosm-try-btn${trying?' active':''}" data-id="${co.id}">${trying?'Remove':'Try'}</button>
-          <button class="cosm-buy-btn" data-id="${co.id}" data-cost="${co.cost}"${G.coins<co.cost?' disabled':''}>Buy</button>
+          <button class="cosm-try-btn${trying?' active':''}" onclick="tryCosmetic('${co.id}')">${trying?'▶ Remove':'👁 Try'}</button>
+          <button class="cosm-buy-btn" onclick="buyCosmetic('${co.id}',${co.cost})"${G.coins<co.cost?' disabled':''}>Buy ${co.cost} 🪙</button>
         </div>`;
     }
     cosmGrid.appendChild(item);
   });
-  cosmGrid.addEventListener('click', e => {
-    const tryBtn = e.target.closest('.cosm-try-btn');
-    const buyBtn = e.target.closest('.cosm-buy-btn');
-    if (tryBtn) {
-      const id = tryBtn.dataset.id;
-      if (triedCosmetics.includes(id)) triedCosmetics = triedCosmetics.filter(x=>x!==id);
-      else triedCosmetics.push(id);
-      refreshGaragePreview();
-      buildGarage();
-    } else if (buyBtn && !buyBtn.disabled) {
-      const id = buyBtn.dataset.id, cost = +buyBtn.dataset.cost;
-      if (G.coins < cost) { notify('Not enough coins!','bad'); return; }
-      G.coins -= cost;
-      getVehicleCosmetics(G.currentVehicle).push(id);
-      triedCosmetics = triedCosmetics.filter(x=>x!==id);
-      updateTopBar(); saveGame();
-      notify(`${COSMETICS.find(c=>c.id===id).name} equipped! -${cost} 🪙`, 'good');
-      refreshGaragePreview();
-      buildGarage();
-    }
-  }, {once: true});
 
   // Preview: show vehicle with owned + tried cosmetics
   refreshGaragePreview();
 }
 
+function tryCosmetic(id) {
+  if (triedCosmetics.includes(id)) triedCosmetics = triedCosmetics.filter(x => x !== id);
+  else triedCosmetics.push(id);
+  refreshGaragePreview();
+  buildGarage();
+}
+
+function buyCosmetic(id, cost) {
+  if (G.coins < cost) { notify('Not enough coins!', 'bad'); return; }
+  G.coins -= cost;
+  getVehicleCosmetics(G.currentVehicle).push(id);
+  triedCosmetics = triedCosmetics.filter(x => x !== id);
+  updateTopBar(); saveGame();
+  notify(`${COSMETICS.find(c => c.id === id).name} equipped! -${cost} 🪙`, 'good');
+  refreshGaragePreview();
+  buildGarage();
+}
+
 function refreshGaragePreview() {
   const vid = G.currentVehicle;
   const color = G.vehicleColors[vid] || VEHICLES[vid].defaultColor;
-  const allCosmetics = [...getVehicleCosmetics(vid), ...triedCosmetics.filter(id=>!getVehicleCosmetics(vid).includes(id))];
+  const owned = getVehicleCosmetics(vid);
+  const allCosmetics = [...owned, ...triedCosmetics.filter(id => !owned.includes(id))];
   updatePreviewer(vid, color, allCosmetics);
   startPreviewLoop();
 }
