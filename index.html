@@ -387,16 +387,18 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 
 <!-- Garage -->
 <div id="garageScreen" class="screen">
-  <div class="gar-content">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+  <div style="position:sticky;top:75px;background:linear-gradient(135deg,#0f0c29,#1a1a3e);z-index:10;padding:15px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;padding:0 15px">
       <button class="btn btn-sec btn-sm" onclick="showScreen('menuScreen')">← Menu</button>
       <div style="font-size:1.4em;font-weight:900;color:#ffcc02">🔧 Garage</div>
     </div>
-    <div class="cross-nav">
+    <div class="cross-nav" style="margin-bottom:0;padding:10px 15px;border-bottom:none">
       <div class="cross-nav-btn" onclick="buildArenaCards();showScreen('raceSetupScreen')">🏁 Race</div>
       <div class="cross-nav-btn" onclick="showScreen('shopScreen')">🏪 Shop</div>
       <div class="cross-nav-btn" onclick="showScreen('leaderboardScreen')">🏆 Leaderboard</div>
     </div>
+  </div>
+  <div class="gar-content">
     <div class="gar-vehicle-name" id="garVehicleName">Farm Tractor</div>
     <div class="gar-vehicle-stats" id="garVehicleStats"></div>
 
@@ -419,16 +421,18 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 
 <!-- Shop -->
 <div id="shopScreen" class="screen">
-  <div class="shop-content">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+  <div style="position:sticky;top:75px;background:linear-gradient(135deg,#0f0c29,#1a1a3e);z-index:10;padding:15px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;padding:0 15px">
       <button class="btn btn-sec btn-sm" onclick="showScreen('menuScreen')">← Menu</button>
       <div style="font-size:1.4em;font-weight:900;color:#ffcc02">🏪 Vehicle Shop</div>
     </div>
-    <div class="cross-nav">
+    <div class="cross-nav" style="margin-bottom:0;padding:10px 15px;border-bottom:none">
       <div class="cross-nav-btn" onclick="buildArenaCards();showScreen('raceSetupScreen')">🏁 Race</div>
       <div class="cross-nav-btn" onclick="showScreen('garageScreen')">🔧 Garage</div>
       <div class="cross-nav-btn" onclick="showScreen('leaderboardScreen')">🏆 Leaderboard</div>
     </div>
+  </div>
+  <div class="shop-content">
     <div class="shop-grid" id="shopGrid"></div>
   </div>
 </div>
