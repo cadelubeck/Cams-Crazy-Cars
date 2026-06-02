@@ -527,18 +527,18 @@ const VEHICLES = {
 
 const ARENAS = [
   {id:'grass', name:'Grass Fields',      emoji:'🌿', lock:0, color:0x3d8b37, fogColor:0x87ceeb, sky:0x87ceeb,
-   desc:'Slippery grass — master the drift!',        surface:'slippery'},
+   desc:'Soft heavy grass — speed and acceleration take a hit'},
   {id:'sand',  name:'Sand Pit Speedway', emoji:'🏜️', lock:3, color:0xd4a017, fogColor:0xf5deb3, sky:0xfceebb,
-   desc:'Deep sand kills your speed — power through!', surface:'soft'},
+   desc:'Deep sand — even slower and heavier than grass'},
   {id:'water', name:'Water Crossing',   emoji:'🌊', lock:0, tireLock:true, color:0x1a6fa0, fogColor:0x87ceeb, sky:0x87ceeb,
-   desc:'Treacherous water — requires Max Tires! 🔵', surface:'water'},
+   desc:'Water resistance drags everything down — Max Tires required! 🔵'},
 ];
 
 // Returns physics multipliers for the current race surface
 function getSurfaceModifiers(arenaIdx) {
-  if (arenaIdx === 0) return {handling:0.48, accel:1.0,  maxSpd:1.0,  drag:0.93}; // grass: slippery
-  if (arenaIdx === 1) return {handling:1.0,  accel:0.58, maxSpd:0.72, drag:0.84}; // sand: slow & heavy
-  if (arenaIdx === 2) return {handling:0.55, accel:0.82, maxSpd:0.88, drag:0.91}; // water: slippery+drag
+  if (arenaIdx === 0) return {handling:1.0, accel:0.62, maxSpd:0.78, drag:0.83}; // grass: soft & heavy
+  if (arenaIdx === 1) return {handling:1.0, accel:0.58, maxSpd:0.72, drag:0.84}; // sand: slow & heavy
+  if (arenaIdx === 2) return {handling:1.0, accel:0.72, maxSpd:0.82, drag:0.85}; // water: resistance only
   return {handling:1.0, accel:1.0, maxSpd:1.0, drag:0.88};
 }
 
@@ -803,10 +803,6 @@ class CarEntity {
     if (input.a) this.heading += effHandling * turnF * dt * 60;
     if (input.d) this.heading -= effHandling * turnF * dt * 60;
 
-    // Slippery surfaces: random slide wobble at speed
-    if ((G.raceConfig.arena === 0 || G.raceConfig.arena === 2) && Math.abs(this.speed) > 3) {
-      this.heading += (Math.random() - 0.5) * 0.004 * Math.abs(this.speed) * sm.handling;
-    }
 
     // Move
     const mdt = dt * 60;
