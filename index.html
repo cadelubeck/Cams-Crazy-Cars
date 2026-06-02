@@ -128,7 +128,15 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 .dnf-sub{font-size:1em;color:#e17055}
 
 /* Results */
-#resultsScreen{background:rgba(0,0,0,.92);backdrop-filter:blur(20px)}
+#resultsScreen{background:rgba(0,0,0,.92);backdrop-filter:blur(20px);overflow:hidden}
+.flag-row{position:absolute;top:0;left:0;right:0;display:none;justify-content:space-around;padding:0 10px;pointer-events:none;z-index:5}
+#resultsScreen.first-place .flag-row{display:flex}
+.wave-flag{font-size:clamp(2em,6vw,3.5em);animation:flagWave 0.6s ease-in-out infinite alternate;transform-origin:bottom center}
+.wave-flag:nth-child(2){animation-delay:.15s}
+.wave-flag:nth-child(3){animation-delay:.3s}
+.wave-flag:nth-child(4){animation-delay:.45s}
+.wave-flag:nth-child(5){animation-delay:.6s}
+@keyframes flagWave{from{transform:rotate(-18deg) scaleY(0.9)}to{transform:rotate(18deg) scaleY(1.05)}}
 .res-title{font-size:2em;font-weight:900;color:#fff;margin-bottom:5px}
 .res-arena{font-size:.8em;color:#888;margin-bottom:30px;letter-spacing:2px;text-transform:uppercase}
 .res-place{font-size:clamp(4em,12vw,8em);font-weight:900;margin-bottom:10px;line-height:1}
@@ -395,6 +403,9 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 
 <!-- Results -->
 <div id="resultsScreen" class="screen">
+  <div class="flag-row">
+    <span class="wave-flag">🏁</span><span class="wave-flag">🏁</span><span class="wave-flag">🏁</span><span class="wave-flag">🏁</span><span class="wave-flag">🏁</span>
+  </div>
   <div class="res-title">RACE COMPLETE!</div>
   <div class="res-arena" id="resArena">Grass Fields Arena</div>
   <div class="res-trophy" id="resTrophy">🏆</div>
@@ -686,6 +697,114 @@ let renderer, scene, camera, cameraLookAt;
 let trackMeshGroup, groundMesh, skyMesh;
 let treeObstacles = []; // {x, z, r, label?} — collidable obstacles (trees, rocks)
 let jumpZones = [];    // {x, z, r, boost} — ramps that send cars airborne
+
+// ==============================
+// AUDIO ENGINE
+// ==============================
+let audioCtx = null;
+let engineOsc = null, engineGain = null, engineFilter = null;
+let engineOsc2 = null; // harmonic layer
+
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+function startEngineSound() {
+  stopEngineSound();
+  const ctx = getAudioCtx();
+  engineFilter = ctx.createBiquadFilter();
+  engineFilter.type = 'lowpass';
+  engineFilter.frequency.value = 600;
+  engineFilter.Q.value = 1.2;
+
+  engineGain = ctx.createGain();
+  engineGain.gain.value = 0;
+
+  engineOsc = ctx.createOscillator();
+  engineOsc.type = 'sawtooth';
+  engineOsc.frequency.value = 55;
+  engineOsc.connect(engineFilter);
+
+  engineOsc2 = ctx.createOscillator();
+  engineOsc2.type = 'square';
+  engineOsc2.frequency.value = 110;
+  const g2 = ctx.createGain(); g2.gain.value = 0.18;
+  engineOsc2.connect(g2); g2.connect(engineFilter);
+
+  engineFilter.connect(engineGain);
+  engineGain.connect(ctx.destination);
+  engineOsc.start(); engineOsc2.start();
+}
+
+function updateEngineSound(throttleOn, speed, maxSpeed) {
+  if (!engineOsc) return;
+  const ctx = audioCtx;
+  const t = ctx.currentTime;
+  // Idle frequency rises with speed; punch up when throttle pressed
+  const speedRatio = Math.min(speed / (maxSpeed || 1), 1);
+  const baseFreq = 55 + speedRatio * 145 + (throttleOn ? 30 : 0);
+  engineOsc.frequency.setTargetAtTime(baseFreq, t, 0.08);
+  engineOsc2.frequency.setTargetAtTime(baseFreq * 2.02, t, 0.08);
+  // Filter opens with speed for growl
+  engineFilter.frequency.setTargetAtTime(400 + speedRatio * 1200 + (throttleOn ? 400 : 0), t, 0.1);
+  // Volume: quiet idle, louder under throttle
+  const vol = throttleOn ? 0.22 : (speedRatio > 0.05 ? 0.09 : 0.04);
+  engineGain.gain.setTargetAtTime(vol, t, 0.06);
+}
+
+function stopEngineSound() {
+  try {
+    if (engineOsc)  { engineOsc.stop();  engineOsc.disconnect(); }
+    if (engineOsc2) { engineOsc2.stop(); engineOsc2.disconnect(); }
+    if (engineFilter) engineFilter.disconnect();
+    if (engineGain)   engineGain.disconnect();
+  } catch(e) {}
+  engineOsc = engineOsc2 = engineFilter = engineGain = null;
+}
+
+function playBeep(freq, duration, vol=0.4, type='sine') {
+  try {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const g   = ctx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    g.gain.setValueAtTime(vol, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    osc.connect(g); g.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + duration);
+  } catch(e) {}
+}
+
+function playCheer(isFirst) {
+  try {
+    const ctx = getAudioCtx();
+    // Crowd noise: filtered white noise burst
+    const bufLen = ctx.sampleRate * 2.5;
+    const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufLen; i++) data[i] = Math.random() * 2 - 1;
+    const noise = ctx.createBufferSource();
+    noise.buffer = buf;
+    const bpf = ctx.createBiquadFilter();
+    bpf.type = 'bandpass'; bpf.frequency.value = 900; bpf.Q.value = 0.4;
+    const cheerGain = ctx.createGain();
+    cheerGain.gain.setValueAtTime(0, ctx.currentTime);
+    cheerGain.gain.linearRampToValueAtTime(isFirst ? 0.55 : 0.28, ctx.currentTime + 0.3);
+    cheerGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 2.5);
+    noise.connect(bpf); bpf.connect(cheerGain); cheerGain.connect(ctx.destination);
+    noise.start();
+
+    if (isFirst) {
+      // Victory fanfare — ascending notes
+      const notes = [523, 659, 784, 1047];
+      notes.forEach((f, i) => setTimeout(() => playBeep(f, 0.3, 0.35, 'square'), 200 + i * 180));
+      setTimeout(() => playBeep(1047, 0.7, 0.4, 'square'), 200 + 4 * 180);
+    }
+  } catch(e) {}
+}
 let raceActive = false;
 let raceTimer = 0;
 let raceLaps = 3;
@@ -2107,6 +2226,7 @@ function startRace() {
 
   // Countdown
   document.getElementById('dnfMsg').classList.remove('active');
+  startEngineSound();
   countdown(() => {
     raceActive = true;
     allCars.forEach(c => { c.lapStart = 0; c.lapProgress = c.trackT; });
@@ -2145,6 +2265,7 @@ function updatePhysics(dt) {
   playerCar.update(dt, inp);
   const playerSpeedMph = Math.abs(playerCar.speed) * 7.5;
   if (playerSpeedMph > playerTopSpeed) playerTopSpeed = playerSpeedMph;
+  updateEngineSound(inp.w, Math.abs(playerCar.speed), playerCar.maxSpeed);
 
   // Speed lines effect
   document.getElementById('speedLines').style.opacity = playerSpeedMph > 70 ? Math.min(1,(playerSpeedMph-70)/40) : '0';
@@ -2225,6 +2346,7 @@ function endRace() {
   if (raceFinished) return;
   raceFinished = true;
   raceActive = false;
+  stopEngineSound();
 
   // Build final order: actual finishers (in crossing order) → still racing → DNF
   if (!finishOrder.includes(playerCar) && !playerCar.dnf) finishOrder.push(playerCar);
@@ -2239,6 +2361,7 @@ function endRace() {
   if (!finalOrder.includes(playerCar)) finalOrder.push(playerCar);
 
   const place = finalOrder.indexOf(playerCar) + 1;
+  playCheer(place === 1);
   const coins = PLACE_REWARDS[Math.min(place, 5)];
   G.coins += coins;
   G.stats.totalCoins += coins;
@@ -2255,6 +2378,8 @@ function endRace() {
 
   document.getElementById('resPlace').textContent = placeSuf;
   document.getElementById('resPlace').className = `res-place ${placeClass}`;
+  const resScreen = document.getElementById('resultsScreen');
+  resScreen.classList.toggle('first-place', place === 1);
   document.getElementById('resTrophy').textContent = trophy;
   document.getElementById('resCoins').textContent = `+${coins} 🪙`;
   document.getElementById('resTotal').textContent = `Total: ${G.coins} 🪙`;
@@ -2311,6 +2436,7 @@ function countdown(onGo) {
     if (n <= 0) {
       num.textContent = 'GO!';
       num.style.color='#00ff88';
+      playBeep(880, 0.5, 0.5, 'square'); // high GO! beep
       setTimeout(() => {
         el.classList.remove('active');
         num.style.color='#ffcc02';
@@ -2319,6 +2445,7 @@ function countdown(onGo) {
       }, 700);
       return;
     }
+    playBeep(440, 0.25, 0.4, 'sine'); // low beep for 3/2/1
     n--;
     setTimeout(tick, 900);
   };
@@ -2490,6 +2617,7 @@ function resumeRace() {
 }
 
 function restartRace() {
+  stopEngineSound();
   document.getElementById('pauseMenu').style.display = 'none';
   racePaused = false;
   raceActive = false;
@@ -2541,6 +2669,7 @@ function showScreen(id) {
 }
 
 function backToMenu() {
+  stopEngineSound();
   document.getElementById('gc').style.display = 'none';
   document.getElementById('raceHUD').classList.remove('active');
   document.getElementById('minimap').classList.remove('active');
