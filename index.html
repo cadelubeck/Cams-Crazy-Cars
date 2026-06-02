@@ -146,7 +146,7 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 
 /* Garage */
 #garageScreen{background:linear-gradient(135deg,#0f0c29,#1a1a3e);overflow-y:auto;align-items:flex-start}
-.gar-content{width:100%;max-width:650px;padding:20px 15px 0;margin-top:70px}
+.gar-content{width:100%;max-width:650px;padding:20px 15px 0;margin:70px auto 0}
 .gar-vehicle-name{font-size:1.8em;font-weight:900;color:#fff;margin-bottom:5px;text-align:center}
 .gar-vehicle-stats{display:flex;gap:15px;justify-content:center;margin-bottom:25px;font-size:.8em;color:#888}
 .gar-stat-item{text-align:center}
@@ -175,7 +175,7 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 
 /* Shop */
 #shopScreen{background:linear-gradient(135deg,#0f0c29,#1a1a3e);overflow-y:auto;align-items:flex-start}
-.shop-content{width:100%;max-width:700px;padding:20px 15px 0;margin-top:70px}
+.shop-content{width:100%;max-width:700px;padding:20px 15px 0;margin:70px auto 0}
 .shop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:14px;width:100%}
 .shop-card{background:rgba(255,255,255,.05);border:2px solid rgba(255,255,255,.08);border-radius:16px;padding:18px 14px;text-align:center;transition:all .25s;cursor:pointer}
 .shop-card:hover:not(.owned-card){border-color:#ff6b35;background:rgba(255,107,53,.1);transform:translateY(-4px)}
@@ -193,7 +193,7 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 
 /* Leaderboard */
 #leaderboardScreen{background:linear-gradient(135deg,#0f0c29,#302b63);padding-top:0;overflow-y:auto;align-items:flex-start}
-.lb-content{width:100%;max-width:500px;padding:0 15px 20px;margin-top:70px}
+.lb-content{width:100%;max-width:500px;padding:20px 15px;margin:70px auto 0}
 .lb-title{font-size:1.8em;font-weight:900;color:#ffcc02;text-align:center;margin-bottom:20px}
 .lb-row{display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:12px 16px;margin-bottom:8px}
 .lb-pos{width:30px;font-size:1.2em;font-weight:900;color:#ffcc02}
@@ -227,6 +227,7 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 .cross-nav{display:flex;gap:8px;margin-bottom:15px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06)}
 .cross-nav-btn{flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:8px 6px;text-align:center;cursor:pointer;font-family:inherit;font-size:.72em;color:#ccc;transition:all .2s}
 .cross-nav-btn:hover{background:rgba(255,107,53,.15);border-color:#ff6b35;color:#fff}
+.cross-nav-btn.active{background:rgba(255,107,53,.25);border-color:#ff6b35;color:#ff6b35;cursor:default;pointer-events:none}
 /* Mobile */
 #mobileCtrl{position:fixed;bottom:0;left:0;right:0;display:none;justify-content:space-between;padding:0 20px 20px;z-index:200;pointer-events:none}
 @media(hover:none){#mobileCtrl{display:flex}}
@@ -285,13 +286,19 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 
 <!-- Race Setup -->
 <div id="raceSetupScreen" class="screen">
-  <div style="width:100%;max-width:650px;padding:20px;margin-top:70px">
-    <div class="cross-nav" style="margin-bottom:25px">
+  <div style="position:sticky;top:75px;width:100%;background:linear-gradient(135deg,#0f0c29,#302b63,#24243e);z-index:10;padding:15px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;padding:0 15px">
+      <button class="btn btn-sec btn-sm" onclick="showScreen('menuScreen')">← Menu</button>
+      <div style="font-size:1.4em;font-weight:900;color:#ffcc02">🏁 Race Setup</div>
+    </div>
+    <div class="cross-nav" style="margin-bottom:0;padding:10px 15px;border-bottom:none">
+      <div class="cross-nav-btn active">🏁 Race</div>
       <div class="cross-nav-btn" onclick="showScreen('garageScreen')">🔧 Garage</div>
       <div class="cross-nav-btn" onclick="showScreen('shopScreen')">🏪 Shop</div>
       <div class="cross-nav-btn" onclick="showScreen('leaderboardScreen')">🏆 Leaderboard</div>
-      <div class="cross-nav-btn" onclick="showScreen('menuScreen')">← Menu</div>
     </div>
+  </div>
+  <div style="width:100%;max-width:650px;padding:20px 15px;margin:70px auto 0">
     <div class="setup-section">
       <div class="setup-title">Choose Arena</div>
       <div class="arena-cards" id="arenaCards"></div>
@@ -387,13 +394,14 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 
 <!-- Garage -->
 <div id="garageScreen" class="screen">
-  <div style="position:sticky;top:75px;background:linear-gradient(135deg,#0f0c29,#1a1a3e);z-index:10;padding:15px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+  <div style="position:sticky;top:75px;width:100%;background:linear-gradient(135deg,#0f0c29,#1a1a3e);z-index:10;padding:15px 0;border-bottom:1px solid rgba(255,255,255,.06)">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;padding:0 15px">
       <button class="btn btn-sec btn-sm" onclick="showScreen('menuScreen')">← Menu</button>
       <div style="font-size:1.4em;font-weight:900;color:#ffcc02">🔧 Garage</div>
     </div>
     <div class="cross-nav" style="margin-bottom:0;padding:10px 15px;border-bottom:none">
       <div class="cross-nav-btn" onclick="buildArenaCards();showScreen('raceSetupScreen')">🏁 Race</div>
+      <div class="cross-nav-btn active">🔧 Garage</div>
       <div class="cross-nav-btn" onclick="showScreen('shopScreen')">🏪 Shop</div>
       <div class="cross-nav-btn" onclick="showScreen('leaderboardScreen')">🏆 Leaderboard</div>
     </div>
@@ -421,7 +429,7 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 
 <!-- Shop -->
 <div id="shopScreen" class="screen">
-  <div style="position:sticky;top:75px;background:linear-gradient(135deg,#0f0c29,#1a1a3e);z-index:10;padding:15px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+  <div style="position:sticky;top:75px;width:100%;background:linear-gradient(135deg,#0f0c29,#1a1a3e);z-index:10;padding:15px 0;border-bottom:1px solid rgba(255,255,255,.06)">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;padding:0 15px">
       <button class="btn btn-sec btn-sm" onclick="showScreen('menuScreen')">← Menu</button>
       <div style="font-size:1.4em;font-weight:900;color:#ffcc02">🏪 Vehicle Shop</div>
@@ -429,6 +437,7 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
     <div class="cross-nav" style="margin-bottom:0;padding:10px 15px;border-bottom:none">
       <div class="cross-nav-btn" onclick="buildArenaCards();showScreen('raceSetupScreen')">🏁 Race</div>
       <div class="cross-nav-btn" onclick="showScreen('garageScreen')">🔧 Garage</div>
+      <div class="cross-nav-btn active">🏪 Shop</div>
       <div class="cross-nav-btn" onclick="showScreen('leaderboardScreen')">🏆 Leaderboard</div>
     </div>
   </div>
@@ -439,13 +448,19 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 
 <!-- Leaderboard -->
 <div id="leaderboardScreen" class="screen">
-  <div class="lb-content">
-    <div class="cross-nav" style="margin-bottom:25px">
+  <div style="position:sticky;top:75px;width:100%;background:linear-gradient(135deg,#0f0c29,#302b63);z-index:10;padding:15px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;padding:0 15px">
+      <button class="btn btn-sec btn-sm" onclick="showScreen('menuScreen')">← Menu</button>
+      <div style="font-size:1.4em;font-weight:900;color:#ffcc02">🏆 Leaderboard</div>
+    </div>
+    <div class="cross-nav" style="margin-bottom:0;padding:10px 15px;border-bottom:none">
       <div class="cross-nav-btn" onclick="buildArenaCards();showScreen('raceSetupScreen')">🏁 Race</div>
       <div class="cross-nav-btn" onclick="showScreen('garageScreen')">🔧 Garage</div>
       <div class="cross-nav-btn" onclick="showScreen('shopScreen')">🏪 Shop</div>
-      <div class="cross-nav-btn" onclick="showScreen('menuScreen')">← Menu</div>
+      <div class="cross-nav-btn active">🏆 Leaderboard</div>
     </div>
+  </div>
+  <div class="lb-content">
     <div id="lbList"></div>
   </div>
 </div>
