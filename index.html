@@ -285,9 +285,14 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 <!-- Race Setup -->
 <div id="raceSetupScreen" class="screen">
   <div style="width:100%;max-width:650px;padding:80px 20px 20px;overflow-y:auto">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:25px">
-      <button class="btn btn-sec btn-sm" onclick="showScreen('menuScreen')">← Back</button>
-      <div style="font-size:1.5em;font-weight:900;color:#ffcc02">Race Setup</div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+      <button class="btn btn-sec btn-sm" onclick="showScreen('menuScreen')">← Menu</button>
+      <div style="font-size:1.4em;font-weight:900;color:#ffcc02">🏁 Race Setup</div>
+    </div>
+    <div class="cross-nav">
+      <div class="cross-nav-btn" onclick="showScreen('garageScreen')">🔧 Garage</div>
+      <div class="cross-nav-btn" onclick="showScreen('shopScreen')">🏪 Shop</div>
+      <div class="cross-nav-btn" onclick="showScreen('leaderboardScreen')">🏆 Leaderboard</div>
     </div>
     <div class="setup-section">
       <div class="setup-title">Choose Arena</div>
@@ -433,9 +438,14 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 <!-- Leaderboard -->
 <div id="leaderboardScreen" class="screen">
   <div class="lb-content">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
-      <button class="btn btn-sec btn-sm" onclick="showScreen('menuScreen')">← Back</button>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+      <button class="btn btn-sec btn-sm" onclick="showScreen('menuScreen')">← Menu</button>
       <div class="lb-title">🏆 Leaderboard</div>
+    </div>
+    <div class="cross-nav">
+      <div class="cross-nav-btn" onclick="buildArenaCards();showScreen('raceSetupScreen')">🏁 Race</div>
+      <div class="cross-nav-btn" onclick="showScreen('garageScreen')">🔧 Garage</div>
+      <div class="cross-nav-btn" onclick="showScreen('shopScreen')">🏪 Shop</div>
     </div>
     <div id="lbList"></div>
   </div>
