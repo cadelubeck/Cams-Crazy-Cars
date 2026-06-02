@@ -169,9 +169,20 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 .upg-cost{font-size:.85em;color:#ffcc02;font-weight:900;white-space:nowrap}
 .upg-maxed{font-size:.75em;color:#00b894;font-weight:900}
 .cosmetic-grid{display:flex;gap:8px;flex-wrap:wrap}
-.cosm-btn{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:8px 12px;font-family:inherit;font-size:.75em;color:#ccc;cursor:pointer;transition:all .2s}
-.cosm-btn:hover{border-color:#ff6b35;color:#ff6b35}
-.cosm-btn.owned{border-color:#00b894;color:#00b894}
+.cosm-item{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:10px 12px;font-family:inherit;font-size:.75em;color:#ccc;display:flex;flex-direction:column;gap:6px;min-width:120px;transition:border-color .2s}
+.cosm-item.trying{border-color:#ffcc02;background:rgba(255,204,2,.08)}
+.cosm-item.owned{border-color:#00b894;background:rgba(0,184,148,.06)}
+.cosm-item-top{display:flex;align-items:center;gap:6px;font-weight:900}
+.cosm-item-price{font-size:.85em;color:#ffcc02;margin-left:auto}
+.cosm-item-owned{font-size:.85em;color:#00b894;margin-left:auto}
+.cosm-actions{display:flex;gap:5px}
+.cosm-try-btn{flex:1;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:7px;color:#fff;font-family:inherit;font-size:.7em;padding:4px 0;cursor:pointer}
+.cosm-try-btn.active{background:rgba(255,204,2,.3);border-color:#ffcc02;color:#ffcc02}
+.cosm-buy-btn{flex:1;background:#ff6b35;border:none;border-radius:7px;color:#fff;font-family:inherit;font-size:.7em;padding:4px 0;cursor:pointer;font-weight:900}
+.cosm-buy-btn:disabled{opacity:.4;cursor:not-allowed}
+/* Vehicle preview canvas */
+.preview-wrap{position:relative;width:100%;border-radius:16px;overflow:hidden;margin-bottom:18px;border:1px solid rgba(255,255,255,.1);background:#0d0d2b}
+#vehiclePreview{display:block;width:100%;height:auto}
 
 /* Shop */
 #shopScreen{background:linear-gradient(135deg,#0f0c29,#1a1a3e);padding-top:75px;overflow:hidden;align-items:stretch;justify-content:flex-start}
@@ -417,6 +428,7 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
   </div>
   <div style="flex:1;overflow-y:auto;width:100%">
     <div class="gar-content">
+      <div class="preview-wrap"><canvas id="vehiclePreview"></canvas></div>
       <div class="gar-vehicle-name" id="garVehicleName">Farm Tractor</div>
       <div class="gar-vehicle-stats" id="garVehicleStats"></div>
 
@@ -785,8 +797,9 @@ class CarEntity {
     this.aiAggression = 0;
     this.aiSpeedMult = 1;
 
-    // 3D mesh
-    this.mesh = buildCarMesh(vehicleId, color);
+    // 3D mesh (player gets cosmetics applied)
+    const meshCosmetics = isPlayer ? getVehicleCosmetics(vehicleId) : [];
+    this.mesh = buildCarMesh(vehicleId, color, meshCosmetics);
     this.mesh.position.set(this.x, 0.5, this.z);
     this.mesh.rotation.y = this.heading + Math.PI;
     scene.add(this.mesh);
@@ -1071,7 +1084,7 @@ class CarEntity {
 // ==============================
 // CAR MESH BUILDER
 // ==============================
-function buildCarMesh(vehicleId, colorHex) {
+function buildCarMesh(vehicleId, colorHex, cosmetics=[]) {
   const g = new THREE.Group();
   const col = new THREE.Color(colorHex);
   const bodyMat = new THREE.MeshLambertMaterial({color: col});
@@ -1181,6 +1194,97 @@ function buildCarMesh(vehicleId, colorHex) {
     const exh = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 1.5, 8), darkMat);
     exh.position.set(bw/2-0.3, bh + 1.1 + 1.2, cz-cl*0.3);
     g.add(exh);
+  }
+
+  // Cosmetic add-ons
+  if (cosmetics.length > 0) {
+    const chromeMat = new THREE.MeshLambertMaterial({color:0xbbbbbb});
+    const neonMat   = new THREE.MeshLambertMaterial({color:0x00eeff, emissive:0x00ccee, emissiveIntensity:0.9});
+    const blackMat2 = new THREE.MeshLambertMaterial({color:0x111111});
+    const redFlashMat = new THREE.MeshLambertMaterial({color:0xff2200, emissive:0xee0000, emissiveIntensity:0.7});
+    const blueFlashMat = new THREE.MeshLambertMaterial({color:0x0044ff, emissive:0x0033ee, emissiveIntensity:0.7});
+    const cabTop = bh + ch + (cat==='Tractor' ? 1.1 : wr);
+    const bodyTop = bh + (cat==='Tractor' ? 1.1 : wr);
+    const frontZ = -bl/2;
+    const rearZ  =  bl/2;
+
+    if (cosmetics.includes('smokestack')) {
+      const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.26, 2.8, 8), chromeMat);
+      pipe.position.set(bw*0.32, bodyTop + 1.4, frontZ*0.45);
+      g.add(pipe);
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.18, 0.35, 8), blackMat2);
+      cap.position.set(bw*0.32, bodyTop + 2.85, frontZ*0.45);
+      g.add(cap);
+    }
+    if (cosmetics.includes('rooflights')) {
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(cw*0.85, 0.32, 0.65), blackMat2);
+      bar.position.set(0, cabTop + 0.18, cz);
+      g.add(bar);
+      for (let li=0;li<4;li++) {
+        const lmat = li%2===0 ? redFlashMat : blueFlashMat;
+        const lens = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.28, 0.6), lmat);
+        lens.position.set(-cw*0.3 + li*cw*0.2, cabTop + 0.28, cz);
+        g.add(lens);
+      }
+    }
+    if (cosmetics.includes('bullbar')) {
+      const hbar = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, bw+1.0, 8), chromeMat);
+      hbar.rotation.z = Math.PI/2;
+      hbar.position.set(0, bodyTop*0.35, frontZ - 0.35);
+      g.add(hbar);
+      [-bw*0.35, bw*0.35].forEach(sx => {
+        const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, bodyTop*0.7, 8), chromeMat);
+        strut.position.set(sx, bodyTop*0.65, frontZ - 0.25);
+        g.add(strut);
+      });
+    }
+    if (cosmetics.includes('flag')) {
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 3.2, 6), chromeMat);
+      pole.position.set(bw*0.44, bodyTop + 1.6, rearZ - 0.3);
+      g.add(pole);
+      const flag = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.0),
+        new THREE.MeshLambertMaterial({color:0xff2200, side:THREE.DoubleSide}));
+      flag.position.set(bw*0.44 + 0.8, bodyTop + 2.7, rearZ - 0.3);
+      g.add(flag);
+    }
+    if (cosmetics.includes('neon')) {
+      [-bw/2-0.08, bw/2+0.08].forEach(nx => {
+        const strip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, bl*0.82), neonMat);
+        strip.position.set(nx, wr*0.55, 0);
+        g.add(strip);
+      });
+      const under = new THREE.Mesh(new THREE.BoxGeometry(bw*0.85, 0.08, bl*0.72), neonMat);
+      under.position.set(0, 0.1, 0);
+      g.add(under);
+    }
+    if (cosmetics.includes('spoiler')) {
+      [-bw*0.33, bw*0.33].forEach(sx => {
+        const strut = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.9, 0.18), chromeMat);
+        strut.position.set(sx, cabTop + 0.45, rearZ - 0.55);
+        g.add(strut);
+      });
+      const wing = new THREE.Mesh(new THREE.BoxGeometry(bw*0.85, 0.14, 1.5), bodyMat);
+      wing.position.set(0, cabTop + 0.9, rearZ - 0.55);
+      wing.rotation.x = -0.14;
+      g.add(wing);
+    }
+    if (cosmetics.includes('mudflaps')) {
+      [-bw/2-ww/2-0.08, bw/2+ww/2+0.08].forEach(fx => {
+        const flap = new THREE.Mesh(new THREE.BoxGeometry(0.14, wr*1.1, 1.1), blackMat2);
+        flap.position.set(fx, wr*0.55, rearZ*0.5);
+        g.add(flap);
+      });
+    }
+    if (cosmetics.includes('horn')) {
+      const hornBody = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.1, 1.1, 8), chromeMat);
+      hornBody.rotation.z = Math.PI/2;
+      hornBody.position.set(bw*0.27, bodyTop + 0.32, frontZ*0.38);
+      g.add(hornBody);
+      const bell = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.24, 0.38, 8), chromeMat);
+      bell.rotation.z = Math.PI/2;
+      bell.position.set(bw*0.27 + 0.62, bodyTop + 0.32, frontZ*0.38);
+      g.add(bell);
+    }
   }
 
   g.castShadow = true;
@@ -2256,6 +2360,71 @@ function updateHUD() {
 // ==============================
 // MINIMAP
 // ==============================
+// ==============================
+// VEHICLE PREVIEW RENDERER
+// ==============================
+let prevRdr = null, prevScene = null, prevCam = null, prevMesh = null, prevAnimId = null;
+let triedCosmetics = []; // cosmetics being previewed (not yet purchased)
+
+function initPreviewer() {
+  const c = document.getElementById('vehiclePreview');
+  if (!c) return false;
+  const wrap = c.parentElement;
+  const w = Math.max(wrap.clientWidth || 300, 200);
+  const h = Math.round(w * 0.52);
+  c.width = w; c.height = h;
+  if (!prevRdr) {
+    prevRdr = new THREE.WebGLRenderer({canvas: c, antialias: true});
+    prevRdr.setClearColor(0x0d0d2b, 1);
+    prevRdr.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    prevScene = new THREE.Scene();
+    prevCam = new THREE.PerspectiveCamera(38, w/h, 0.1, 300);
+    prevScene.add(new THREE.AmbientLight(0xffffff, 0.7));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.1);
+    sun.position.set(8, 15, 10);
+    prevScene.add(sun);
+    const fill = new THREE.DirectionalLight(0x8899ff, 0.4);
+    fill.position.set(-8, 5, -10);
+    prevScene.add(fill);
+    const gnd = new THREE.Mesh(new THREE.PlaneGeometry(40, 40),
+      new THREE.MeshLambertMaterial({color:0x1a1a3e}));
+    gnd.rotation.x = -Math.PI/2; gnd.position.y = -0.05;
+    prevScene.add(gnd);
+  } else {
+    prevRdr.setSize(w, h);
+    prevCam.aspect = w/h;
+    prevCam.updateProjectionMatrix();
+  }
+  return true;
+}
+
+function updatePreviewer(vehicleId, colorHex, cosmetics) {
+  if (!initPreviewer()) return;
+  if (prevMesh) { prevScene.remove(prevMesh); prevMesh = null; }
+  prevMesh = buildCarMesh(vehicleId, colorHex || VEHICLES[vehicleId].defaultColor, cosmetics || []);
+  prevMesh.rotation.y = Math.PI; // face camera
+  prevScene.add(prevMesh);
+}
+
+function startPreviewLoop() {
+  stopPreviewLoop();
+  let angle = 0.7;
+  function tick() {
+    prevAnimId = requestAnimationFrame(tick);
+    if (!prevRdr || !prevScene || !prevCam || !prevMesh) return;
+    angle += 0.012;
+    const r = 22;
+    prevCam.position.set(Math.sin(angle)*r, 8, Math.cos(angle)*r);
+    prevCam.lookAt(0, 3, 0);
+    prevRdr.render(prevScene, prevCam);
+  }
+  tick();
+}
+
+function stopPreviewLoop() {
+  if (prevAnimId) { cancelAnimationFrame(prevAnimId); prevAnimId = null; }
+}
+
 let minimapCtx = null;
 function updateMinimap() {
   const canvas = document.getElementById('minimapCanvas');
@@ -2354,8 +2523,10 @@ function showScreen(id) {
   });
   const hasTopBar = ['menuScreen','garageScreen','shopScreen','raceSetupScreen','leaderboardScreen','settingsScreen'].includes(id);
   document.getElementById('topBar').style.display = hasTopBar ? 'flex' : 'none';
+  // Stop preview if leaving garage/shop
+  if (id !== 'garageScreen' && id !== 'shopScreen') stopPreviewLoop();
   // Refresh dynamic screens on show
-  if (id === 'garageScreen'    && G.initialized) buildGarage();
+  if (id === 'garageScreen'    && G.initialized) { triedCosmetics = []; buildGarage(); }
   if (id === 'shopScreen'      && G.initialized) buildShop();
   if (id === 'leaderboardScreen' && G.initialized) buildLeaderboard();
   if (id === 'settingsScreen'  && G.initialized) buildSettings();
@@ -2561,28 +2732,59 @@ function buildGarage() {
     upList.appendChild(row);
   });
 
-  // Cosmetics
+  // Cosmetics — try before buy
+  const vCosmetics = getVehicleCosmetics(G.currentVehicle);
   const cosmGrid = document.getElementById('cosmeticGrid');
   cosmGrid.innerHTML = '';
-  const vCosmetics = getVehicleCosmetics(G.currentVehicle);
   COSMETICS.forEach(co => {
     const owned = vCosmetics.includes(co.id);
-    const btn = document.createElement('div');
-    btn.className = 'cosm-btn' + (owned?' owned':'');
-    btn.innerHTML = `${co.emoji} ${co.name} ${owned ? '✓' : '— '+co.cost+' 🪙'}`;
-    if (!owned) {
-      btn.addEventListener('click', () => {
-        if (G.coins < co.cost) { notify('Not enough coins!','bad'); return; }
-        G.coins -= co.cost;
-        getVehicleCosmetics(G.currentVehicle).push(co.id);
-        updateTopBar();
-        saveGame();
-        notify(`${co.name} equipped! -${co.cost} 🪙`,'good');
-        buildGarage();
-      });
+    const trying = triedCosmetics.includes(co.id);
+    const item = document.createElement('div');
+    item.className = 'cosm-item' + (owned?' owned':trying?' trying':'');
+    if (owned) {
+      item.innerHTML = `<div class="cosm-item-top">${co.emoji} ${co.name}<span class="cosm-item-owned">✓ Owned</span></div>`;
+    } else {
+      item.innerHTML = `
+        <div class="cosm-item-top">${co.emoji} ${co.name}<span class="cosm-item-price">${co.cost} 🪙</span></div>
+        <div class="cosm-actions">
+          <button class="cosm-try-btn${trying?' active':''}" data-id="${co.id}">${trying?'Remove':'Try'}</button>
+          <button class="cosm-buy-btn" data-id="${co.id}" data-cost="${co.cost}"${G.coins<co.cost?' disabled':''}>Buy</button>
+        </div>`;
     }
-    cosmGrid.appendChild(btn);
+    cosmGrid.appendChild(item);
   });
+  cosmGrid.addEventListener('click', e => {
+    const tryBtn = e.target.closest('.cosm-try-btn');
+    const buyBtn = e.target.closest('.cosm-buy-btn');
+    if (tryBtn) {
+      const id = tryBtn.dataset.id;
+      if (triedCosmetics.includes(id)) triedCosmetics = triedCosmetics.filter(x=>x!==id);
+      else triedCosmetics.push(id);
+      refreshGaragePreview();
+      buildGarage();
+    } else if (buyBtn && !buyBtn.disabled) {
+      const id = buyBtn.dataset.id, cost = +buyBtn.dataset.cost;
+      if (G.coins < cost) { notify('Not enough coins!','bad'); return; }
+      G.coins -= cost;
+      getVehicleCosmetics(G.currentVehicle).push(id);
+      triedCosmetics = triedCosmetics.filter(x=>x!==id);
+      updateTopBar(); saveGame();
+      notify(`${COSMETICS.find(c=>c.id===id).name} equipped! -${cost} 🪙`, 'good');
+      refreshGaragePreview();
+      buildGarage();
+    }
+  }, {once: true});
+
+  // Preview: show vehicle with owned + tried cosmetics
+  refreshGaragePreview();
+}
+
+function refreshGaragePreview() {
+  const vid = G.currentVehicle;
+  const color = G.vehicleColors[vid] || VEHICLES[vid].defaultColor;
+  const allCosmetics = [...getVehicleCosmetics(vid), ...triedCosmetics.filter(id=>!getVehicleCosmetics(vid).includes(id))];
+  updatePreviewer(vid, color, allCosmetics);
+  startPreviewLoop();
 }
 
 function buyUpgrade(id) {
@@ -2602,15 +2804,34 @@ function buyUpgrade(id) {
 // ==============================
 // SHOP
 // ==============================
+let shopPreviewVid = null;
+
 function buildShop() {
+  // If no preview target yet, default to current vehicle
+  if (!shopPreviewVid) shopPreviewVid = G.currentVehicle;
+  const previewVd = VEHICLES[shopPreviewVid];
+
   const grid = document.getElementById('shopGrid');
   grid.innerHTML = '';
+
+  // Preview area at the top of shop
+  const prevArea = document.createElement('div');
+  prevArea.style.cssText = 'width:100%;margin-bottom:18px';
+  prevArea.innerHTML = `
+    <div class="preview-wrap"><canvas id="vehiclePreview"></canvas></div>
+    <div style="text-align:center;font-size:1.1em;font-weight:900;color:#fff;margin-bottom:4px">${previewVd.emoji} ${previewVd.name}</div>
+    <div style="text-align:center;font-size:.75em;color:#888;margin-bottom:4px">${previewVd.cat} &mdash; Spd: ${previewVd.spd} &nbsp; Acc: ${previewVd.acc} &nbsp; Han: ${previewVd.han}</div>
+  `;
+  grid.appendChild(prevArea);
+
   Object.entries(VEHICLES).forEach(([vid, vd]) => {
     const owned = G.ownedVehicles.includes(vid);
     const isEquipped = G.currentVehicle === vid;
+    const isPreviewing = shopPreviewVid === vid;
     const canAfford = G.coins >= vd.cost;
     const card = document.createElement('div');
     card.className = 'shop-card' + (isEquipped?' equip-card':(owned?' owned-card':(!canAfford&&!owned?' cant-afford':'')));
+    card.style.outline = isPreviewing ? '2px solid #ffcc02' : '';
     card.innerHTML = `
       <span class="sc-icon">${vd.emoji}</span>
       <div class="sc-name">${vd.name}</div>
@@ -2619,13 +2840,21 @@ function buildShop() {
         ? isEquipped
           ? `<div class="sc-equipped">✓ EQUIPPED</div>`
           : `<div class="sc-owned">OWNED</div><button class="sc-use-btn" onclick="equipVehicle('${vid}')">Use</button>`
-        : `<div class="sc-price">${vd.cost} 🪙</div>`
+        : `<div class="sc-price">${vd.cost} 🪙</div><button class="btn btn-sm" style="width:100%;margin-top:6px;font-size:.7em" onclick="buyVehicle('${vid}')" ${!canAfford?'disabled':''}>Buy</button>`
       }
     `;
-    if (!owned) {
-      card.addEventListener('click', () => buyVehicle(vid));
-    }
+    card.addEventListener('click', e => {
+      if (e.target.tagName === 'BUTTON') return;
+      shopPreviewVid = vid;
+      buildShop();
+    });
     grid.appendChild(card);
+  });
+
+  // Render preview after DOM settles
+  requestAnimationFrame(() => {
+    updatePreviewer(shopPreviewVid, VEHICLES[shopPreviewVid].defaultColor, []);
+    startPreviewLoop();
   });
 }
 
