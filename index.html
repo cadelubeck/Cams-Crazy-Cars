@@ -788,7 +788,7 @@ class CarEntity {
     // 3D mesh
     this.mesh = buildCarMesh(vehicleId, color);
     this.mesh.position.set(this.x, 0.5, this.z);
-    this.mesh.rotation.y = this.heading;
+    this.mesh.rotation.y = this.heading + Math.PI;
     scene.add(this.mesh);
 
     // Wheel refs
@@ -925,7 +925,7 @@ class CarEntity {
 
     // Update 3D mesh
     this.mesh.position.set(this.x, 0.5 + this.airY, this.z);
-    this.mesh.rotation.y = this.heading;
+    this.mesh.rotation.y = this.heading + Math.PI;
     // Spin wheels
     const wheelSpin = this.speed * dt * 2;
     this.wheels.forEach(w => w.rotation.x += wheelSpin);
@@ -1022,7 +1022,7 @@ class CarEntity {
     }
 
     this.mesh.position.set(this.x, 0.5 + this.airY, this.z);
-    this.mesh.rotation.y = this.heading;
+    this.mesh.rotation.y = this.heading + Math.PI;
     this.wheels.forEach(w => w.rotation.x += this.speed * dt * 2);
 
     // Stuck rescue: if nearly stopped for 2.5s, snap back to track heading forward
