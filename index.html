@@ -68,7 +68,7 @@ body{font-family:'Arial Black',Impact,sans-serif;background:#0a0a1a;overflow:hid
 .mb-label{font-size:.75em;font-weight:900;color:#fff;text-transform:uppercase;letter-spacing:1px}
 
 /* Race Setup */
-#raceSetupScreen{background:linear-gradient(135deg,#0f0c29,#302b63,#24243e)}
+#raceSetupScreen{background:linear-gradient(135deg,#0f0c29,#302b63,#24243e);padding-top:0;overflow-y:auto;align-items:flex-start}
 .setup-section{width:100%;max-width:650px;margin-bottom:25px}
 .setup-title{font-size:1.5em;font-weight:900;color:#ffcc02;margin-bottom:15px;text-transform:uppercase;letter-spacing:2px}
 .setup-sub{font-size:.75em;color:#888;margin-bottom:15px}
@@ -145,8 +145,8 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 .res-btns{display:flex;gap:12px}
 
 /* Garage */
-#garageScreen{background:linear-gradient(135deg,#0f0c29,#1a1a3e);overflow-y:auto;align-items:center;padding-top:70px;padding-bottom:30px}
-.gar-content{width:100%;max-width:650px;padding:0 15px;padding-top:0}
+#garageScreen{background:linear-gradient(135deg,#0f0c29,#1a1a3e);overflow-y:auto;align-items:flex-start}
+.gar-content{width:100%;max-width:650px;padding:20px 15px 0;margin-top:70px}
 .gar-vehicle-name{font-size:1.8em;font-weight:900;color:#fff;margin-bottom:5px;text-align:center}
 .gar-vehicle-stats{display:flex;gap:15px;justify-content:center;margin-bottom:25px;font-size:.8em;color:#888}
 .gar-stat-item{text-align:center}
@@ -174,8 +174,8 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 .cosm-btn.owned{border-color:#00b894;color:#00b894}
 
 /* Shop */
-#shopScreen{background:linear-gradient(135deg,#0f0c29,#1a1a3e);overflow-y:auto;align-items:center;padding-top:70px;padding-bottom:30px}
-.shop-content{width:100%;max-width:700px;padding:0 15px;padding-top:0}
+#shopScreen{background:linear-gradient(135deg,#0f0c29,#1a1a3e);overflow-y:auto;align-items:flex-start}
+.shop-content{width:100%;max-width:700px;padding:20px 15px 0;margin-top:70px}
 .shop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:14px;width:100%}
 .shop-card{background:rgba(255,255,255,.05);border:2px solid rgba(255,255,255,.08);border-radius:16px;padding:18px 14px;text-align:center;transition:all .25s;cursor:pointer}
 .shop-card:hover:not(.owned-card){border-color:#ff6b35;background:rgba(255,107,53,.1);transform:translateY(-4px)}
@@ -192,8 +192,8 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 .sc-use-btn:hover{transform:scale(1.05)}
 
 /* Leaderboard */
-#leaderboardScreen{background:linear-gradient(135deg,#0f0c29,#302b63)}
-.lb-content{width:100%;max-width:500px;padding:20px 15px}
+#leaderboardScreen{background:linear-gradient(135deg,#0f0c29,#302b63);padding-top:0;overflow-y:auto;align-items:flex-start}
+.lb-content{width:100%;max-width:500px;padding:0 15px 20px;margin-top:70px}
 .lb-title{font-size:1.8em;font-weight:900;color:#ffcc02;text-align:center;margin-bottom:20px}
 .lb-row{display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:12px 16px;margin-bottom:8px}
 .lb-pos{width:30px;font-size:1.2em;font-weight:900;color:#ffcc02}
@@ -285,7 +285,7 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 
 <!-- Race Setup -->
 <div id="raceSetupScreen" class="screen">
-  <div style="width:100%;max-width:650px;padding:20px;overflow-y:auto">
+  <div style="width:100%;max-width:650px;padding:20px;margin-top:70px">
     <div class="cross-nav" style="margin-bottom:25px">
       <div class="cross-nav-btn" onclick="showScreen('garageScreen')">🔧 Garage</div>
       <div class="cross-nav-btn" onclick="showScreen('shopScreen')">🏪 Shop</div>
