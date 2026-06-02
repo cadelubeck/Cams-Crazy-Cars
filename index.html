@@ -526,10 +526,21 @@ const VEHICLES = {
 };
 
 const ARENAS = [
-  {id:'grass', name:'Grass Fields',        emoji:'🌿', lock:0,    color:0x3d8b37, fogColor:0x87ceeb, sky:0x87ceeb, desc:'Slippery grass — drift control!'},
-  {id:'sand',  name:'Sand Pit Speedway',   emoji:'🏜️', lock:3,    color:0xd4a017, fogColor:0xf5deb3, sky:0xfceebb, desc:'Loose sand — big tires help!'},
-  {id:'water', name:'Water Crossing',      emoji:'🌊', lock:5,    color:0x1a6fa0, fogColor:0x87ceeb, sky:0x87ceeb, desc:'Water hazards ahead!'},
+  {id:'grass', name:'Grass Fields',      emoji:'🌿', lock:0, color:0x3d8b37, fogColor:0x87ceeb, sky:0x87ceeb,
+   desc:'Slippery grass — master the drift!',        surface:'slippery'},
+  {id:'sand',  name:'Sand Pit Speedway', emoji:'🏜️', lock:3, color:0xd4a017, fogColor:0xf5deb3, sky:0xfceebb,
+   desc:'Deep sand kills your speed — power through!', surface:'soft'},
+  {id:'water', name:'Water Crossing',   emoji:'🌊', lock:0, tireLock:true, color:0x1a6fa0, fogColor:0x87ceeb, sky:0x87ceeb,
+   desc:'Treacherous water — requires Max Tires! 🔵', surface:'water'},
 ];
+
+// Returns physics multipliers for the current race surface
+function getSurfaceModifiers(arenaIdx) {
+  if (arenaIdx === 0) return {handling:0.48, accel:1.0,  maxSpd:1.0,  drag:0.93}; // grass: slippery
+  if (arenaIdx === 1) return {handling:1.0,  accel:0.58, maxSpd:0.72, drag:0.84}; // sand: slow & heavy
+  if (arenaIdx === 2) return {handling:0.55, accel:0.82, maxSpd:0.88, drag:0.91}; // water: slippery+drag
+  return {handling:1.0, accel:1.0, maxSpd:1.0, drag:0.88};
+}
 
 const COLORS = [
   {name:'Red',      hex:'#e74c3c'},{name:'Blue',     hex:'#2980b9'},{name:'Green',    hex:'#27ae60'},
@@ -772,21 +783,30 @@ class CarEntity {
     if (this.dnf || this.finished) return;
     if (countdownActive) return;
 
+    // Surface modifiers (grass=slippery, sand=soft, water=slippery+slow)
+    const sm = getSurfaceModifiers(G.raceConfig.arena);
+
     // Throttle
-    const effMax = this.maxSpeed * this.speedPenalty;
+    const effMax = this.maxSpeed * this.speedPenalty * sm.maxSpd;
     if (input.w) {
-      this.speed = Math.min(effMax, this.speed + this.accel * dt * 60);
+      this.speed = Math.min(effMax, this.speed + this.accel * sm.accel * dt * 60);
     } else if (input.s) {
-      this.speed = Math.max(-effMax * 0.4, this.speed - this.accel * 0.8 * dt * 60);
+      this.speed = Math.max(-effMax * 0.4, this.speed - this.accel * sm.accel * 0.8 * dt * 60);
     } else {
-      this.speed *= Math.pow(0.88, dt * 60);
+      this.speed *= Math.pow(sm.drag, dt * 60);
       if (Math.abs(this.speed) < 0.02) this.speed = 0;
     }
 
-    // Steering — camera looks in +Z so screen-right is world -X, hence swapped signs
+    // Steering
     const turnF = Math.min(1, Math.abs(this.speed) / 4) * Math.sign(this.speed);
-    if (input.a) this.heading += this.handling * turnF * dt * 60;
-    if (input.d) this.heading -= this.handling * turnF * dt * 60;
+    const effHandling = this.handling * sm.handling;
+    if (input.a) this.heading += effHandling * turnF * dt * 60;
+    if (input.d) this.heading -= effHandling * turnF * dt * 60;
+
+    // Slippery surfaces: random slide wobble at speed
+    if ((G.raceConfig.arena === 0 || G.raceConfig.arena === 2) && Math.abs(this.speed) > 3) {
+      this.heading += (Math.random() - 0.5) * 0.004 * Math.abs(this.speed) * sm.handling;
+    }
 
     // Move
     const mdt = dt * 60;
@@ -871,11 +891,13 @@ class CarEntity {
     while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
     while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
 
-    const aiMaxSpd = this.maxSpeed * aiSpeedMult;
-    this.speed = Math.min(aiMaxSpd, this.speed + this.accel * dt * 60 * 0.9);
+    const sm = getSurfaceModifiers(G.raceConfig.arena);
+    const aiMaxSpd = this.maxSpeed * aiSpeedMult * sm.maxSpd;
+    this.speed = Math.min(aiMaxSpd, this.speed + this.accel * sm.accel * dt * 60 * 0.9);
 
     const turnF = Math.min(1, Math.abs(this.speed) / 4);
-    this.heading += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), this.handling * 1.5) * turnF * dt * 60;
+    const effH = this.handling * sm.handling;
+    this.heading += Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), effH * 1.5) * turnF * dt * 60;
 
     // Move
     const mdt = dt * 60;
@@ -1627,6 +1649,11 @@ function mulberry32(a) {
 // ==============================
 function startRace() {
   if (!G.currentVehicle) { notify('Select a vehicle first!','bad'); return; }
+  const arena = ARENAS[G.raceConfig.arena];
+  if (arena.tireLock && getVehicleUpgrades(G.currentVehicle).wheels < 10) {
+    notify('Water Crossing requires Max Tires (level 10)! 🔵', 'bad');
+    return;
+  }
 
   raceLaps = G.raceConfig.laps;
   const arenaIdx = G.raceConfig.arena;
@@ -2125,13 +2152,17 @@ function buildArenaCards() {
   const container = document.getElementById('arenaCards');
   container.innerHTML = '';
   ARENAS.forEach((ar, idx) => {
-    const locked = G.level < ar.lock;
+    const levelLocked = G.level < ar.lock;
+    const tireLevel = G.initialized ? getVehicleUpgrades(G.currentVehicle).wheels : 0;
+    const tireLocked = ar.tireLock && tireLevel < 10;
+    const locked = levelLocked || tireLocked;
+    const lockMsg = levelLocked ? `🔒 Level ${ar.lock}` : tireLocked ? `🔵 Max Tires Required (${tireLevel}/10)` : '';
     const card = document.createElement('div');
     card.className = 'arena-card' + (idx===0?' sel':'') + (locked?' locked':'');
     card.innerHTML = `
       <span class="ar-icon">${ar.emoji}</span>
       <div class="ar-name">${ar.name}</div>
-      <div class="ar-lock">${locked ? `🔒 Level ${ar.lock}` : ar.desc}</div>
+      <div class="ar-lock">${locked ? lockMsg : ar.desc}</div>
     `;
     if (!locked) {
       card.addEventListener('click', () => {
