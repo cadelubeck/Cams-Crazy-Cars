@@ -742,6 +742,7 @@ class CarEntity {
     this.lapTimes = [];
     this.lapStart = 0;
     this.crashes = 0;
+    this.stuckTimer = 0;
 
     // AI
     this.aiLookahead = 0.18;
@@ -799,13 +800,18 @@ class CarEntity {
 
     if (dist > TRACK_WIDTH / 2 + 5) {
       this.speed *= Math.pow(0.7, dt * 60);
+      // Wall/barrier hit damage
+      if (dist > TRACK_WIDTH / 2 + 8 && Math.abs(this.speed) > 2 && this.damageCooldown <= 0) {
+        this.takeDamage(1);
+        if (this.isPlayer) notify('Barrier hit! 💥', 'bad');
+      }
       if (dist > TRACK_WIDTH / 2 + 30 && this.isPlayer) {
-        // Auto reset (rollover style)
+        // Auto reset
         const snap = trackPoint(t);
         this.x = snap.x;
         this.z = snap.z;
         this.speed *= 0.3;
-        if (this.isPlayer) notify('Back on track!', 'bad');
+        notify('Back on track!', 'bad');
         G.stats.rollovers++;
       }
     }
@@ -881,6 +887,11 @@ class CarEntity {
     const prevT = this.trackT;
     this.trackT = t;
 
+    // Wall damage for AI
+    if (dist > TRACK_WIDTH / 2 + 8 && this.speed > 2 && this.damageCooldown <= 0) {
+      this.takeDamage(1);
+    }
+
     let delta = t - prevT;
     if (delta < -Math.PI) delta += Math.PI * 2;
     if (delta > Math.PI) delta -= Math.PI * 2;
@@ -903,6 +914,21 @@ class CarEntity {
     this.mesh.position.set(this.x, 0.5, this.z);
     this.mesh.rotation.y = this.heading;
     this.wheels.forEach(w => w.rotation.x += this.speed * dt * 2);
+
+    // Stuck rescue: if nearly stopped for 2.5s, snap back to track heading forward
+    if (this.speed < 0.5) {
+      this.stuckTimer += dt;
+      if (this.stuckTimer > 2.5) {
+        const tang = trackTangent(this.trackT);
+        const snap = trackPoint(this.trackT);
+        this.x = snap.x; this.z = snap.z;
+        this.heading = Math.atan2(tang.x, tang.z);
+        this.speed = this.maxSpeed * 0.4;
+        this.stuckTimer = 0;
+      }
+    } else {
+      this.stuckTimer = 0;
+    }
   }
 
   takeDamage(amount) {
@@ -918,7 +944,7 @@ class CarEntity {
       this.dnf = true;
       this.speed = 0;
       if (this.isPlayer) showDNF();
-      else { finishOrder.push(this); }
+      // DNF cars are placed LAST in endRace, not here
     }
   }
 
@@ -950,13 +976,13 @@ function buildCarMesh(vehicleId, colorHex) {
   let bw, bh, bl, cw, ch, cl, cz, wr, ww, fwz, rwz, fwr;
   if (cat === 'Tractor') {
     bw=3.2; bh=1.8; bl=5.5; cw=2.8; ch=1.2; cl=2.2; cz=-0.3;
-    wr=1.3; ww=0.9; fwz=1.5; rwz=-1.5; fwr=0.7;
+    wr=1.3; ww=0.9; fwz=1.5; rwz=1.8; fwr=0.7;
   } else if (cat === 'Truck') {
     bw=4.0; bh=1.9; bl=7.5; cw=3.5; ch=1.3; cl=2.8; cz=1.0;
-    wr=1.0; ww=0.7; fwz=2.0; rwz=-2.2; fwr=1.0;
+    wr=1.0; ww=0.7; fwz=2.2; rwz=2.6; fwr=1.0;
   } else {
     bw=3.5; bh=1.2; bl=6.5; cw=3.0; ch=0.9; cl=2.8; cz=0.2;
-    wr=0.85; ww=0.55; fwz=1.7; rwz=-1.8; fwr=0.85;
+    wr=0.85; ww=0.55; fwz=2.0; rwz=2.3; fwr=0.85;
   }
 
   // Body
@@ -1223,6 +1249,12 @@ function buildRoad(arenaIdx) {
   }
 }
 
+// Returns true if track parameter t is near a figure-8 crossing (skip barriers there)
+function nearCrossing(t, thresh = 0.25) {
+  const mod = ((t % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+  return mod < thresh || mod > Math.PI * 2 - thresh || Math.abs(mod - Math.PI) < thresh;
+}
+
 function addCurbsAndBarriers(arenaIdx) {
   const roadW = TRACK_WIDTH;
   const curbW = 7;       // rumble strip width
@@ -1237,6 +1269,7 @@ function addCurbsAndBarriers(arenaIdx) {
     for (let seg = 0; seg < numCurbSegs; seg++) {
       const t1 = seg * curbSegAngle;
       const t2 = t1 + curbSegAngle;
+      if (nearCrossing(t1)) continue; // skip at figure-8 crossing zones
       const subN = 6;
       const pos = [], idx = [], nrm = [];
       for (let j = 0; j <= subN; j++) {
@@ -1282,8 +1315,9 @@ function addCurbsAndBarriers(arenaIdx) {
       const l = Math.sqrt(tx*tx + tz*tz) || 1;
       const rx = tz / l, rz = -tx / l;
       const off = side * (roadW / 2 + curbW);
-      iPos.push(p.x + rx*off, 0,     p.z + rz*off,
-                p.x + rx*off, wallH, p.z + rz*off);
+      const h = nearCrossing(t) ? 0 : wallH; // no wall at crossing zones
+      iPos.push(p.x + rx*off, 0, p.z + rz*off,
+                p.x + rx*off, h,  p.z + rz*off);
       // Normal pointing inward toward track center
       iNrm.push(-rx*side, 0, -rz*side,
                 -rx*side, 0, -rz*side);
@@ -1313,8 +1347,9 @@ function addCurbsAndBarriers(arenaIdx) {
       const rx = tz / l, rz = -tx / l;
       const inner = side * (roadW / 2 + curbW);
       const outer = side * (roadW / 2 + curbW + wallD);
-      tPos.push(p.x + rx*inner, wallH, p.z + rz*inner,
-                p.x + rx*outer, wallH, p.z + rz*outer);
+      const h = nearCrossing(t) ? 0 : wallH;
+      tPos.push(p.x + rx*inner, h, p.z + rz*inner,
+                p.x + rx*outer, h, p.z + rz*outer);
       tNrm.push(0,1,0, 0,1,0);
     }
     for (let i = 0; i < N; i++) {
@@ -1340,8 +1375,9 @@ function addCurbsAndBarriers(arenaIdx) {
       const l = Math.sqrt(tx*tx + tz*tz) || 1;
       const rx = tz / l, rz = -tx / l;
       const off = side * (roadW / 2 + curbW + wallD);
-      oPos.push(p.x + rx*off, 0,     p.z + rz*off,
-                p.x + rx*off, wallH, p.z + rz*off);
+      const h = nearCrossing(t) ? 0 : wallH;
+      oPos.push(p.x + rx*off, 0, p.z + rz*off,
+                p.x + rx*off, h,  p.z + rz*off);
       oNrm.push(rx*side, 0, rz*side, rx*side, 0, rz*side);
     }
     for (let i = 0; i < N; i++) {
@@ -1360,51 +1396,116 @@ function addCurbsAndBarriers(arenaIdx) {
 }
 
 function addStartFinish() {
-  // Checkerboard start/finish at t=0
   const t = 0.02;
   const p = trackPoint(t);
-  const p2 = trackPoint(t+0.01);
-  const tx=p2.x-p.x, tz=p2.z-p.z;
-  const len=Math.sqrt(tx*tx+tz*tz)||1;
-  const rx=tz/len, rz=-tx/len;
+  const p2 = trackPoint(t + 0.01);
+  const fwdX = p2.x - p.x, fwdZ = p2.z - p.z;
+  const fwdLen = Math.sqrt(fwdX*fwdX + fwdZ*fwdZ) || 1;
+  const rx = fwdZ / fwdLen, rz = -fwdX / fwdLen; // lateral
+  const fxn = fwdX / fwdLen, fzn = fwdZ / fwdLen; // forward
+  const rot = Math.atan2(fwdX, fwdZ);
 
   const cbW = TRACK_WIDTH;
-  const cbL = 8;
-  const cols = 8, rows = 2;
-  const cw = cbW/cols, cl = cbL/rows;
 
-  for (let ci=0;ci<cols;ci++) {
-    for (let ri=0;ri<rows;ri++) {
-      const color = (ci+ri)%2===0 ? 0xffffff : 0x000000;
+  // Checkerboard floor (10 columns × 3 rows, vivid black/white)
+  const cols = 10, rows = 3;
+  const cw = cbW / cols, cl = 5;
+  for (let ci = 0; ci < cols; ci++) {
+    for (let ri = 0; ri < rows; ri++) {
+      const color = (ci + ri) % 2 === 0 ? 0xffffff : 0x111111;
       const box = new THREE.Mesh(
-        new THREE.BoxGeometry(cw*0.95, 0.04, cl*0.95),
+        new THREE.BoxGeometry(cw * 0.96, 0.06, cl * 0.96),
         new THREE.MeshLambertMaterial({color})
       );
-      const offLat = (ci - cols/2 + 0.5) * cw;
-      const offLng = (ri - rows/2 + 0.5) * cl;
+      const offLat = (ci - cols / 2 + 0.5) * cw;
+      const offLng = (ri - rows / 2 + 0.5) * cl;
       box.position.set(
-        p.x + rx*offLat + tx/len*offLng,
-        0.07,
-        p.z + rz*offLat + tz/len*offLng
+        p.x + rx * offLat + fxn * offLng,
+        0.09,
+        p.z + rz * offLat + fzn * offLng
       );
-      box.rotation.y = Math.atan2(tx,tz);
-      box.userData.sceneObj=true;
+      box.rotation.y = rot;
+      box.userData.sceneObj = true;
       scene.add(box);
     }
   }
 
-  // Finish arch
-  const archMat = new THREE.MeshLambertMaterial({color:0xffffff});
-  const poleGeo = new THREE.CylinderGeometry(0.5,0.5,12,8);
-  const beam = new THREE.Mesh(new THREE.BoxGeometry(cbW+6,1,1), archMat);
-  beam.position.set(p.x, 12, p.z);
-  beam.userData.sceneObj=true;
-  scene.add(beam);
-  [-1,1].forEach(s => {
-    const pole = new THREE.Mesh(poleGeo, archMat);
-    pole.position.set(p.x+rx*(cbW/2+2)*s, 6, p.z+rz*(cbW/2+2)*s);
-    pole.userData.sceneObj=true;
+  // Gantry arch: two thick poles + overhead beam with racing stripes
+  const poleH = 18, poleR = 0.8;
+  const poleMat = new THREE.MeshLambertMaterial({color: 0xeeeeee});
+  const redMat  = new THREE.MeshLambertMaterial({color: 0xdd1111});
+  const beamMat = new THREE.MeshLambertMaterial({color: 0xcccccc});
+
+  const poleOffset = cbW / 2 + 5;
+  [-1, 1].forEach(s => {
+    const px = p.x + rx * poleOffset * s;
+    const pz = p.z + rz * poleOffset * s;
+
+    // Main pole
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(poleR, poleR + 0.2, poleH, 10), poleMat);
+    pole.position.set(px, poleH / 2, pz);
+    pole.userData.sceneObj = true;
+    pole.castShadow = true;
     scene.add(pole);
+
+    // Red warning band on each pole
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(poleR + 0.05, poleR + 0.05, 1.5, 10), redMat);
+    band.position.set(px, poleH * 0.65, pz);
+    band.userData.sceneObj = true;
+    scene.add(band);
+
+    // Checkered flag on top of each pole
+    [-1, 1].forEach((fx, fi) => {
+      for (let fi2 = 0; fi2 < 4; fi2++) {
+        for (let fj = 0; fj < 2; fj++) {
+          const fc = (fi2 + fj) % 2 === 0 ? 0xffffff : 0x000000;
+          const fsq = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.05),
+            new THREE.MeshLambertMaterial({color: fc}));
+          fsq.position.set(px + fi2 * 0.9 * s, poleH + 0.45 + fj * 0.9, pz);
+          fsq.rotation.y = rot;
+          fsq.userData.sceneObj = true;
+          scene.add(fsq);
+        }
+      }
+    });
+  });
+
+  // Overhead beam
+  const beamW = cbW + 12;
+  const beam = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.4, beamW), beamMat);
+  beam.position.set(p.x, poleH, p.z);
+  beam.rotation.y = rot;
+  beam.userData.sceneObj = true;
+  beam.castShadow = true;
+  scene.add(beam);
+
+  // Racing stripes on beam (alternating red/white blocks)
+  const stripeCount = 14;
+  const stripeW = beamW / stripeCount;
+  for (let i = 0; i < stripeCount; i++) {
+    const sc = i % 2 === 0 ? 0xdd1111 : 0xffffff;
+    const stripe = new THREE.Mesh(
+      new THREE.BoxGeometry(0.15, 1.5, stripeW * 0.92),
+      new THREE.MeshLambertMaterial({color: sc})
+    );
+    const off = (i - stripeCount / 2 + 0.5) * stripeW;
+    stripe.position.set(p.x + rx * 0, poleH, p.z + rz * 0);
+    // Position along beam direction
+    stripe.position.x = p.x + rx * off;
+    stripe.position.z = p.z + rz * off;
+    stripe.rotation.y = rot;
+    stripe.userData.sceneObj = true;
+    scene.add(stripe);
+  }
+
+  // Green & red start lights hanging below beam
+  [0xdd1111, 0xdd1111, 0xffaa00, 0x00cc44, 0x00cc44].forEach((lc, li) => {
+    const lx = rx * ((li - 2) * 8);
+    const light = new THREE.Mesh(new THREE.SphereGeometry(1.0, 8, 6),
+      new THREE.MeshLambertMaterial({color: lc, emissive: lc, emissiveIntensity: 0.6}));
+    light.position.set(p.x + lx, poleH - 2.5, p.z + rz * ((li - 2) * 8));
+    light.userData.sceneObj = true;
+    scene.add(light);
   });
 }
 
@@ -1547,17 +1648,14 @@ function startRace() {
   raceTimer = 0; playerBestLap = Infinity; playerTopSpeed = 0;
   raceActive = false; raceFinished = false;
 
-  // Starting positions (stagger on track near t=0.05)
-  const startT = 0.05;
-  const sp = trackPoint(startT);
-  const st = trackTangent(startT);
+  // Starting grid in the right loop — far from the finish arch at t≈0
+  const startT = Math.PI * 0.5; // mid right-loop; finish line is at t=0 (center crossing)
   const laneOffsets = [0, -16, 16, -32, 32];
-  const startTs = [startT, startT-0.04, startT-0.04, startT-0.08, startT-0.08];
+  const startTs = [startT, startT - 0.05, startT - 0.05, startT - 0.10, startT - 0.10];
 
   // Player car
   const pColor = G.vehicleColors[G.currentVehicle] || VEHICLES[G.currentVehicle].defaultColor;
   playerCar = new CarEntity(G.currentVehicle, pColor, startTs[0], laneOffsets[0], true);
-  playerCar.lapProgress = startTs[0]; // start slightly ahead of t=0
   allCars.push(playerCar);
 
   // AI cars
@@ -1698,14 +1796,19 @@ function endRace() {
   raceFinished = true;
   raceActive = false;
 
-  // Add player to finish order if not there
-  if (!finishOrder.includes(playerCar)) finishOrder.push(playerCar);
-  // Add remaining AI
-  const remaining = allCars.filter(c => !finishOrder.includes(c));
-  remaining.sort((a,b) => b.getProgressRatio() - a.getProgressRatio());
-  finishOrder.push(...remaining);
+  // Build final order: actual finishers (in crossing order) → still racing → DNF
+  if (!finishOrder.includes(playerCar) && !playerCar.dnf) finishOrder.push(playerCar);
 
-  const place = finishOrder.indexOf(playerCar) + 1;
+  const stillRacing = allCars.filter(c => !finishOrder.includes(c) && !c.dnf);
+  stillRacing.sort((a,b) => b.getProgressRatio() - a.getProgressRatio());
+
+  const dnfCars = allCars.filter(c => c.dnf);
+  dnfCars.sort((a,b) => b.getProgressRatio() - a.getProgressRatio());
+
+  const finalOrder = [...finishOrder, ...stillRacing, ...dnfCars];
+  if (!finalOrder.includes(playerCar)) finalOrder.push(playerCar);
+
+  const place = finalOrder.indexOf(playerCar) + 1;
   const coins = PLACE_REWARDS[Math.min(place, 5)];
   G.coins += coins;
   G.stats.totalCoins += coins;
