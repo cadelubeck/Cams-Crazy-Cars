@@ -229,10 +229,11 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 .cross-nav-btn:hover{background:rgba(255,107,53,.15);border-color:#ff6b35;color:#fff}
 .cross-nav-btn.active{background:rgba(255,107,53,.25);border-color:#ff6b35;color:#ff6b35;cursor:default;pointer-events:none}
 /* Mobile */
-#mobileCtrl{position:fixed;bottom:0;left:0;right:0;display:none;justify-content:space-between;padding:0 20px 20px;z-index:200;pointer-events:none}
-@media(hover:none){#mobileCtrl{display:flex}}
-.mctrl-left,.mctrl-right{display:flex;gap:8px}
-.mc-btn{background:rgba(255,255,255,.18);border:2px solid rgba(255,255,255,.3);border-radius:14px;color:#fff;font-size:1.4em;width:65px;height:65px;display:flex;align-items:center;justify-content:center;cursor:pointer;pointer-events:all;touch-action:none;-webkit-tap-highlight-color:transparent;transition:background .1s}
+#mobileCtrl{position:fixed;bottom:0;left:0;right:0;display:none;justify-content:space-between;align-items:flex-end;padding:0 12px 16px;z-index:200;pointer-events:none}
+@media(hover:none){#mobileCtrl.active{display:flex}}
+@media(hover:none){.hud-bl{bottom:110px}.hud-br{display:none}}
+.mctrl-left,.mctrl-right{display:flex;gap:6px}
+.mc-btn{background:rgba(0,0,0,.45);border:2px solid rgba(255,255,255,.25);border-radius:14px;color:#fff;font-size:1.2em;width:58px;height:58px;display:flex;align-items:center;justify-content:center;cursor:pointer;pointer-events:all;touch-action:none;-webkit-tap-highlight-color:transparent;transition:background .1s}
 .mc-btn:active,.mc-btn.pressed{background:rgba(255,107,53,.5);border-color:#ff6b35}
 /* Settings */
 #settingsScreen{background:linear-gradient(135deg,#0f0c29,#1a1a3e);padding-top:75px;overflow:hidden;align-items:stretch;justify-content:flex-start}
@@ -532,13 +533,32 @@ const ARENAS = [
    desc:'Deep sand — even slower and heavier than grass'},
   {id:'water', name:'Water Crossing',   emoji:'🌊', lock:0, tireLock:true, color:0x1a6fa0, fogColor:0x87ceeb, sky:0x87ceeb,
    desc:'Water resistance drags everything down — Max Tires required! 🔵'},
+  {id:'mud',     name:'Mud Bog Challenge',  emoji:'🟫', lock:0, mudLock:true, color:0x3d2010, fogColor:0x9e8e7a, sky:0xb0a085,
+   desc:'Deep mud — tractors with big tires only! 🚜'},
+  {id:'asphalt', name:'Asphalt Speedway',   emoji:'🏎️', lock:6, color:0x1a1a1a, fogColor:0xb0c8e0, sky:0xb0c8e0,
+   desc:'Smooth fast tarmac — race cars dominate! Top speed rules here.'},
 ];
 
 // Returns physics multipliers for the current race surface
-function getSurfaceModifiers(arenaIdx) {
+function getSurfaceModifiers(arenaIdx, vehicleId) {
   if (arenaIdx === 0) return {handling:1.0, accel:0.62, maxSpd:0.78, drag:0.83}; // grass: soft & heavy
   if (arenaIdx === 1) return {handling:1.0, accel:0.58, maxSpd:0.72, drag:0.84}; // sand: slow & heavy
-  if (arenaIdx === 2) return {handling:1.0, accel:0.72, maxSpd:0.82, drag:0.85}; // water: resistance only
+  if (arenaIdx === 2) return {handling:1.0, accel:0.72, maxSpd:0.82, drag:0.85}; // water: resistance
+  if (arenaIdx === 3) { // mud: tractors scale with tire level, others struggle badly
+    const isTractor = vehicleId && VEHICLES[vehicleId] && VEHICLES[vehicleId].cat === 'Tractor';
+    const tireLevel = (vehicleId && G.vehicleUpgrades[vehicleId]) ? (G.vehicleUpgrades[vehicleId].wheels || 0) : 0;
+    if (isTractor) {
+      const b = tireLevel / 10;
+      return {handling: 0.75 + b*0.25, accel: 0.48 + b*0.47, maxSpd: 0.58 + b*0.37, drag: 0.79 + b*0.07};
+    }
+    return {handling:0.55, accel:0.20, maxSpd:0.35, drag:0.70};
+  }
+  if (arenaIdx === 4) { // asphalt: super grippy + fast; race cars (Car cat) get big bonus
+    const isCar = vehicleId && VEHICLES[vehicleId] && VEHICLES[vehicleId].cat === 'Car';
+    const engLevel = (vehicleId && G.vehicleUpgrades[vehicleId]) ? (G.vehicleUpgrades[vehicleId].engine || 0) : 0;
+    const speedBonus = isCar ? 1.0 + engLevel * 0.04 : 1.0; // cars get up to +40% with max engine
+    return {handling: isCar ? 1.35 : 1.0, accel: isCar ? 1.4 * speedBonus : 1.05, maxSpd: isCar ? 1.45 * speedBonus : 1.08, drag: 0.93};
+  }
   return {handling:1.0, accel:1.0, maxSpd:1.0, drag:0.88};
 }
 
@@ -783,8 +803,8 @@ class CarEntity {
     if (this.dnf || this.finished) return;
     if (countdownActive) return;
 
-    // Surface modifiers (grass=slippery, sand=soft, water=slippery+slow)
-    const sm = getSurfaceModifiers(G.raceConfig.arena);
+    // Surface modifiers per arena + vehicle type
+    const sm = getSurfaceModifiers(G.raceConfig.arena, this.vehicleId);
 
     // Throttle
     const effMax = this.maxSpeed * this.speedPenalty * sm.maxSpd;
@@ -887,7 +907,7 @@ class CarEntity {
     while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
     while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
 
-    const sm = getSurfaceModifiers(G.raceConfig.arena);
+    const sm = getSurfaceModifiers(G.raceConfig.arena, this.vehicleId);
     const aiMaxSpd = this.maxSpeed * aiSpeedMult * sm.maxSpd;
     this.speed = Math.min(aiMaxSpd, this.speed + this.accel * sm.accel * dt * 60 * 0.9);
 
@@ -992,15 +1012,16 @@ function buildCarMesh(vehicleId, colorHex) {
   const cat = vd.cat;
 
   let bw, bh, bl, cw, ch, cl, cz, wr, ww, fwz, rwz, fwr;
+  const S = 1.2; // 20% bigger
   if (cat === 'Tractor') {
-    bw=3.2; bh=1.8; bl=5.5; cw=2.8; ch=1.2; cl=2.2; cz=-0.3;
-    wr=1.3; ww=0.9; fwz=1.5; rwz=1.8; fwr=0.7;
+    bw=3.2*S; bh=1.8*S; bl=5.5*S; cw=2.8*S; ch=1.2*S; cl=2.2*S; cz=-0.3*S;
+    wr=1.3*S; ww=0.9*S; fwz=1.5*S; rwz=1.8*S; fwr=0.7*S;
   } else if (cat === 'Truck') {
-    bw=4.0; bh=1.9; bl=7.5; cw=3.5; ch=1.3; cl=2.8; cz=1.0;
-    wr=1.0; ww=0.7; fwz=2.2; rwz=2.6; fwr=1.0;
+    bw=4.0*S; bh=1.9*S; bl=7.5*S; cw=3.5*S; ch=1.3*S; cl=2.8*S; cz=1.0*S;
+    wr=1.0*S; ww=0.7*S; fwz=2.2*S; rwz=2.6*S; fwr=1.0*S;
   } else {
-    bw=3.5; bh=1.2; bl=6.5; cw=3.0; ch=0.9; cl=2.8; cz=0.2;
-    wr=0.85; ww=0.55; fwz=2.0; rwz=2.3; fwr=0.85;
+    bw=3.5*S; bh=1.2*S; bl=6.5*S; cw=3.0*S; ch=0.9*S; cl=2.8*S; cz=0.2*S;
+    wr=0.85*S; ww=0.55*S; fwz=2.0*S; rwz=2.3*S; fwr=0.85*S;
   }
 
   // Body
@@ -1168,6 +1189,8 @@ function buildScene(arenaIdx) {
   // Arena-specific effects
   if (arenaIdx === 1) addSandDunes();
   if (arenaIdx === 2) addWaterPuddles();
+  if (arenaIdx === 3) addMudPits();
+  if (arenaIdx === 4) addAsphaltMarkings();
 }
 
 function buildRoad(arenaIdx) {
@@ -1630,6 +1653,127 @@ function addWaterPuddles() {
   }
 }
 
+function addMudPits() {
+  const rng = mulberry32(42424);
+  // Deep mud pools across the track
+  const darkMud = new THREE.MeshLambertMaterial({color:0x1e0f06, transparent:true, opacity:0.88});
+  const midMud  = new THREE.MeshLambertMaterial({color:0x3a1e0a, transparent:true, opacity:0.75});
+  for (let i = 0; i < 28; i++) {
+    const angle = rng() * Math.PI * 2;
+    const rad   = 25 + rng() * 240;
+    const x = Math.cos(angle) * rad, z = Math.sin(angle) * rad;
+    const w = 18 + rng() * 30, d = 12 + rng() * 20;
+    const mat = rng() > 0.5 ? darkMud : midMud;
+    const pit = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat);
+    pit.rotation.x = -Math.PI / 2;
+    pit.position.set(x, 0.04, z);
+    pit.userData.sceneObj = true;
+    scene.add(pit);
+  }
+  // Scattered rocks / debris chunks for visual interest
+  const rockMat = new THREE.MeshLambertMaterial({color:0x4a3020});
+  for (let i = 0; i < 40; i++) {
+    const angle = rng() * Math.PI * 2;
+    const rad   = 20 + rng() * 280;
+    const x = Math.cos(angle) * rad, z = Math.sin(angle) * rad;
+    const {dist} = nearestTrackT(x, z, 0);
+    if (dist < TRACK_WIDTH / 2 + 5) continue;
+    const r = 1 + rng() * 3;
+    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 0), rockMat);
+    rock.position.set(x, r * 0.5, z);
+    rock.rotation.set(rng() * Math.PI, rng() * Math.PI, rng() * Math.PI);
+    rock.userData.sceneObj = true;
+    rock.castShadow = true;
+    scene.add(rock);
+  }
+}
+
+function addAsphaltMarkings() {
+  const rng = mulberry32(98765);
+  // Racing line — a bright painted stripe that weaves along the inside of curves
+  const lineMat = new THREE.MeshLambertMaterial({color:0xffffff, transparent:true, opacity:0.18});
+  const tireMat = new THREE.MeshLambertMaterial({color:0x111111, transparent:true, opacity:0.55});
+  const pitMat  = new THREE.MeshLambertMaterial({color:0xff6600, transparent:true, opacity:0.45});
+
+  // Tire marks scattered along track
+  for (let i = 0; i < 60; i++) {
+    const t = rng() * Math.PI * 2;
+    const pt = trackPoint(t);
+    const tang = trackTangent(t);
+    const perp = new THREE.Vector3(-tang.z, 0, tang.x);
+    const side = (rng() - 0.5) * TRACK_WIDTH * 0.7;
+    const cx = pt.x + perp.x * side;
+    const cz = pt.z + perp.z * side;
+    const len = 6 + rng() * 12;
+    const wid = 1.5 + rng() * 2;
+    const mark = new THREE.Mesh(new THREE.PlaneGeometry(wid, len), tireMat);
+    mark.rotation.x = -Math.PI / 2;
+    const ang = Math.atan2(tang.x, tang.z) + rng() * 0.4 - 0.2;
+    mark.rotation.z = -ang;
+    mark.position.set(cx, 0.03, cz);
+    mark.userData.sceneObj = true;
+    scene.add(mark);
+  }
+
+  // Pit lane markings — orange-painted boxes on the outer edge of the straight
+  for (let i = 0; i < 6; i++) {
+    const t = i * (Math.PI * 2 / 6) + 0.1;
+    const pt = trackPoint(t);
+    const tang = trackTangent(t);
+    const perp = new THREE.Vector3(-tang.z, 0, tang.x);
+    const side = TRACK_WIDTH * 0.42;
+    const cx = pt.x + perp.x * side;
+    const cz = pt.z + perp.z * side;
+    const box = new THREE.Mesh(new THREE.PlaneGeometry(TRACK_WIDTH * 0.12, 8), pitMat);
+    box.rotation.x = -Math.PI / 2;
+    box.position.set(cx, 0.03, cz);
+    box.userData.sceneObj = true;
+    scene.add(box);
+  }
+
+  // Spectator grandstands — tall concrete walls along outer edge
+  const standMat = new THREE.MeshLambertMaterial({color:0x888888});
+  const seatMat  = new THREE.MeshLambertMaterial({color:0x2244aa});
+  for (let i = 0; i < 12; i++) {
+    const t = (i / 12) * Math.PI * 2;
+    const pt = trackPoint(t);
+    const tang = trackTangent(t);
+    const perp = new THREE.Vector3(-tang.z, 0, tang.x);
+    const side = TRACK_WIDTH * 0.9 + 15;
+    const cx = pt.x + perp.x * side;
+    const cz = pt.z + perp.z * side;
+    const ang = Math.atan2(tang.x, tang.z);
+    // Stand base
+    const base = new THREE.Mesh(new THREE.BoxGeometry(22, 6, 8), standMat);
+    base.position.set(cx, 3, cz);
+    base.rotation.y = ang;
+    base.userData.sceneObj = true;
+    base.castShadow = true;
+    scene.add(base);
+    // Seats (blue panel on top)
+    const seats = new THREE.Mesh(new THREE.BoxGeometry(22, 0.5, 8), seatMat);
+    seats.position.set(cx, 6.3, cz);
+    seats.rotation.y = ang;
+    seats.userData.sceneObj = true;
+    scene.add(seats);
+  }
+
+  // Speed bump stripes at crossing — white dashes painted on road at figure-8 center
+  const dashMat = new THREE.MeshLambertMaterial({color:0xffff00, transparent:true, opacity:0.7});
+  for (let crossT of [0, Math.PI]) {
+    const pt = trackPoint(crossT);
+    const tang = trackTangent(crossT);
+    const perp = new THREE.Vector3(-tang.z, 0, tang.x);
+    for (let d = -TRACK_WIDTH * 0.4; d <= TRACK_WIDTH * 0.4; d += 5) {
+      const dash = new THREE.Mesh(new THREE.PlaneGeometry(2, 3), dashMat);
+      dash.rotation.x = -Math.PI / 2;
+      dash.position.set(pt.x + perp.x * d, 0.05, pt.z + perp.z * d);
+      dash.userData.sceneObj = true;
+      scene.add(dash);
+    }
+  }
+}
+
 // Simple seeded RNG
 function mulberry32(a) {
   return function() {
@@ -1650,6 +1794,13 @@ function startRace() {
     notify('Water Crossing requires Max Tires (level 10)! 🔵', 'bad');
     return;
   }
+  if (arena.mudLock) {
+    const isTractor = VEHICLES[G.currentVehicle] && VEHICLES[G.currentVehicle].cat === 'Tractor';
+    if (!isTractor) { notify('Mud Bog is tractor-only! 🚜', 'bad'); return; }
+    if (getVehicleUpgrades(G.currentVehicle).wheels < 5) {
+      notify('Mud Bog requires Tires level 5+! 🚜', 'bad'); return;
+    }
+  }
 
   raceLaps = G.raceConfig.laps;
   const arenaIdx = G.raceConfig.arena;
@@ -1660,6 +1811,7 @@ function startRace() {
   showScreen(null);
   document.getElementById('raceHUD').classList.add('active');
   document.getElementById('minimap').classList.add('active');
+  document.getElementById('mobileCtrl').classList.add('active');
   document.getElementById('speedLines').style.opacity = '0';
 
   // Build scene
@@ -1681,8 +1833,12 @@ function startRace() {
   playerCar = new CarEntity(G.currentVehicle, pColor, startTs[0], laneOffsets[0], true);
   allCars.push(playerCar);
 
-  // AI cars
-  const aiVehicles = ['muscle','rally','sports','pickup','compact','offroad'];
+  // AI cars — arena-specific vehicle pools
+  const aiVehicles = G.raceConfig.arena === 3
+    ? ['heavyTract','superTract','tractor','heavyTract','superTract']
+    : G.raceConfig.arena === 4
+      ? ['sports','muscle','rally','compact','sports','muscle']
+      : ['muscle','rally','sports','pickup','compact','offroad'];
   const aiColors = ['#e74c3c','#3498db','#f39c12','#9b59b6'];
   const diffMults = [0.58, 0.72, 0.88, 1.02];
   const aiMult = diffMults[diff];
@@ -1862,6 +2018,7 @@ function endRace() {
     document.getElementById('gc').style.display = 'none';
     document.getElementById('raceHUD').classList.remove('active');
     document.getElementById('minimap').classList.remove('active');
+    document.getElementById('mobileCtrl').classList.remove('active');
     document.getElementById('dnfMsg').classList.remove('active');
     document.getElementById('speedLines').style.opacity = '0';
     showScreen('resultsScreen');
@@ -2151,8 +2308,13 @@ function buildArenaCards() {
     const levelLocked = G.level < ar.lock;
     const tireLevel = G.initialized ? getVehicleUpgrades(G.currentVehicle).wheels : 0;
     const tireLocked = ar.tireLock && tireLevel < 10;
-    const locked = levelLocked || tireLocked;
-    const lockMsg = levelLocked ? `🔒 Level ${ar.lock}` : tireLocked ? `🔵 Max Tires Required (${tireLevel}/10)` : '';
+    const isTractor = G.initialized && VEHICLES[G.currentVehicle] && VEHICLES[G.currentVehicle].cat === 'Tractor';
+    const mudLocked = ar.mudLock && (!isTractor || tireLevel < 5);
+    const locked = levelLocked || tireLocked || mudLocked;
+    const lockMsg = levelLocked ? `🔒 Level ${ar.lock}`
+      : tireLocked ? `🔵 Max Tires Required (${tireLevel}/10)`
+      : mudLocked ? `🚜 Tractor + Tires Lvl 5 Required${isTractor ? ' (' + tireLevel + '/5)' : ' (need tractor)'}`
+      : '';
     const card = document.createElement('div');
     card.className = 'arena-card' + (idx===0?' sel':'') + (locked?' locked':'');
     card.innerHTML = `
