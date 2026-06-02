@@ -234,6 +234,12 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 .mctrl-left,.mctrl-right{display:flex;gap:8px}
 .mc-btn{background:rgba(255,255,255,.18);border:2px solid rgba(255,255,255,.3);border-radius:14px;color:#fff;font-size:1.4em;width:65px;height:65px;display:flex;align-items:center;justify-content:center;cursor:pointer;pointer-events:all;touch-action:none;-webkit-tap-highlight-color:transparent;transition:background .1s}
 .mc-btn:active,.mc-btn.pressed{background:rgba(255,107,53,.5);border-color:#ff6b35}
+/* Settings */
+#settingsScreen{background:linear-gradient(135deg,#0f0c29,#1a1a3e);padding-top:75px;overflow:hidden;align-items:stretch;justify-content:flex-start}
+.set-section{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:20px;margin-bottom:18px}
+.set-sec-title{font-size:.85em;color:#ff6b35;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:15px}
+.set-input{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:12px 16px;font-family:inherit;font-size:1em;color:#fff;outline:none;transition:border-color .2s}
+.set-input:focus{border-color:#ff6b35}
 </style>
 </head>
 <body>
@@ -250,7 +256,7 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 <div id="welcomeScreen" class="screen">
   <div class="game-title">CAM'S CRAZY 8 CARS</div>
   <div class="game-tagline">Figure 8 Racing Chaos</div>
-  <div class="welcome-msg">Welcome! Choose your first vehicle — they're all FREE!</div>
+  <div class="welcome-msg">Welcome! Choose your FREE starter vehicle — it's a gift!</div>
   <div class="gift-badge">🎁 You'll also receive 200 starting coins!</div>
   <div class="vehicle-cards" id="starterCards"></div>
   <button class="btn" id="startGameBtn" onclick="startGame()">START RACING! 🏁</button>
@@ -279,7 +285,7 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
     </div>
     <div class="menu-btn-row">
       <div class="menu-btn" onclick="showScreen('leaderboardScreen')"><span class="mb-icon">🏆</span><div class="mb-label">Leaderboard</div></div>
-      <div class="menu-btn" onclick="notify('Settings coming soon!','bad')"><span class="mb-icon">⚙️</span><div class="mb-label">Settings</div></div>
+      <div class="menu-btn" onclick="showScreen('settingsScreen')"><span class="mb-icon">⚙️</span><div class="mb-label">Settings</div></div>
     </div>
   </div>
 </div>
@@ -473,6 +479,19 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
   </div>
 </div>
 
+<!-- Settings -->
+<div id="settingsScreen" class="screen">
+  <div style="width:100%;background:linear-gradient(135deg,#0f0c29,#1a1a3e);padding:15px 0;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0">
+    <div style="display:flex;align-items:center;gap:12px;padding:0 15px">
+      <button class="btn btn-sec btn-sm" onclick="showScreen('menuScreen')">← Menu</button>
+      <div style="font-size:1.4em;font-weight:900;color:#ffcc02">⚙️ Settings</div>
+    </div>
+  </div>
+  <div style="flex:1;overflow-y:auto;width:100%">
+    <div style="max-width:500px;padding:20px 15px;margin:0 auto" id="settingsContent"></div>
+  </div>
+</div>
+
 <!-- Mobile controls -->
 <div id="mobileCtrl">
   <div class="mctrl-left">
@@ -494,9 +513,9 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 // DATA
 // ==============================
 const VEHICLES = {
-  tractor:    {name:'Farm Tractor',    emoji:'🚜', cost:0,    cat:'Tractor', spd:7,  acc:.22, han:.032, defaultColor:'#4a7c59'},
-  pickup:     {name:'Pickup Truck',    emoji:'🛻', cost:0,    cat:'Truck',   spd:9,  acc:.28, han:.038, defaultColor:'#c0392b'},
-  compact:    {name:'Compact Car',     emoji:'🏎️', cost:0,    cat:'Car',     spd:11, acc:.35, han:.048, defaultColor:'#2980b9'},
+  tractor:    {name:'Farm Tractor',    emoji:'🚜', cost:150,  cat:'Tractor', spd:7,  acc:.22, han:.032, defaultColor:'#4a7c59'},
+  pickup:     {name:'Pickup Truck',    emoji:'🛻', cost:175,  cat:'Truck',   spd:9,  acc:.28, han:.038, defaultColor:'#c0392b'},
+  compact:    {name:'Compact Car',     emoji:'🏎️', cost:200,  cat:'Car',     spd:11, acc:.35, han:.048, defaultColor:'#2980b9'},
   muscle:     {name:'Muscle Car',      emoji:'🚗', cost:350,  cat:'Car',     spd:13, acc:.38, han:.044, defaultColor:'#8e44ad'},
   rally:      {name:'Rally Car',       emoji:'🚙', cost:450,  cat:'Car',     spd:14, acc:.42, han:.052, defaultColor:'#27ae60'},
   sports:     {name:'Sports Car',      emoji:'🏎️', cost:500,  cat:'Car',     spd:16, acc:.46, han:.055, defaultColor:'#e74c3c'},
@@ -559,12 +578,63 @@ const G = {
   currentVehicle: null,
   ownedVehicles: [],
   vehicleColors: {},
-  upgrades: {engine:0, wheels:0, gears:0, armor:0},
-  cosmetics: [],
+  vehicleUpgrades: {},
+  vehicleCosmetics: {},
   stats: {racesWon:0, totalCoins:200, fastestLap:Infinity, crashes:0, rollovers:0},
   raceConfig: {arena:0, difficulty:1, laps:3},
   initialized: false,
 };
+
+// Per-vehicle upgrade/cosmetic accessors (initialize on first access)
+function getVehicleUpgrades(vid) {
+  if (!G.vehicleUpgrades[vid]) G.vehicleUpgrades[vid] = {engine:0, wheels:0, gears:0, armor:0};
+  return G.vehicleUpgrades[vid];
+}
+function getVehicleCosmetics(vid) {
+  if (!G.vehicleCosmetics[vid]) G.vehicleCosmetics[vid] = [];
+  return G.vehicleCosmetics[vid];
+}
+
+function saveGame(silent=true) {
+  const save = {
+    coins: G.coins, level: G.level, xp: G.xp, playerName: G.playerName,
+    currentVehicle: G.currentVehicle, ownedVehicles: G.ownedVehicles,
+    vehicleColors: G.vehicleColors, vehicleUpgrades: G.vehicleUpgrades,
+    vehicleCosmetics: G.vehicleCosmetics,
+    stats: {...G.stats, fastestLap: G.stats.fastestLap === Infinity ? null : G.stats.fastestLap},
+    initialized: G.initialized, _savedAt: Date.now(),
+  };
+  localStorage.setItem('cc8c_save', JSON.stringify(save));
+  if (!silent) notify('Game saved! 💾', 'good');
+}
+
+function loadGame() {
+  const raw = localStorage.getItem('cc8c_save');
+  if (!raw) return false;
+  try {
+    const save = JSON.parse(raw);
+    // Migrate from old global upgrades format
+    if (save.upgrades && !save.vehicleUpgrades) {
+      save.vehicleUpgrades = {};
+      if (save.currentVehicle) save.vehicleUpgrades[save.currentVehicle] = save.upgrades;
+      delete save.upgrades;
+    }
+    if (save.cosmetics && !save.vehicleCosmetics) {
+      save.vehicleCosmetics = {};
+      if (save.currentVehicle) save.vehicleCosmetics[save.currentVehicle] = save.cosmetics;
+      delete save.cosmetics;
+    }
+    if (save.stats && save.stats.fastestLap === null) save.stats.fastestLap = Infinity;
+    Object.assign(G, save);
+    return true;
+  } catch(e) { return false; }
+}
+
+function resetGame() {
+  if (!confirm('Reset ALL progress? This cannot be undone!')) return;
+  localStorage.removeItem('cc8c_save');
+  location.reload();
+}
 
 // ==============================
 // THREE.JS GLOBALS
@@ -641,10 +711,11 @@ class CarEntity {
     this.isPlayer = isPlayer;
 
     // Physics
-    const eng = isPlayer ? G.upgrades.engine : 0;
-    const whl = isPlayer ? G.upgrades.wheels : 0;
-    const gr  = isPlayer ? G.upgrades.gears  : 0;
-    const arm = isPlayer ? G.upgrades.armor  : 0;
+    const upg = isPlayer ? getVehicleUpgrades(vehicleId) : {engine:0,wheels:0,gears:0,armor:0};
+    const eng = upg.engine;
+    const whl = upg.wheels;
+    const gr  = upg.gears;
+    const arm = upg.armor;
     this.maxSpeed = (vd.spd + eng * 0.6 + gr * 0.8) * 1.4;
     this.accel    = vd.acc + eng * 0.018;
     this.handling = vd.han + whl * 0.002;
@@ -1642,6 +1713,7 @@ function endRace() {
   G.xp += (6 - place) * 20;
   const newLevel = Math.floor(G.xp / 200) + 1;
   if (newLevel > G.level) { G.level = newLevel; notify(`Level Up! Now Level ${G.level} 🎉`, 'good'); }
+  saveGame();
 
   const placeSuf = PLACE_SUFFIXES[Math.min(place,5)];
   const trophy = PLACE_TROPHIES[Math.min(place,5)];
@@ -1850,13 +1922,14 @@ function showScreen(id) {
     s.classList.remove('active');
     s.classList.remove('with-topbar');
   });
-  const hasTopBar = ['menuScreen','garageScreen','shopScreen','raceSetupScreen','leaderboardScreen'].includes(id);
+  const hasTopBar = ['menuScreen','garageScreen','shopScreen','raceSetupScreen','leaderboardScreen','settingsScreen'].includes(id);
   document.getElementById('topBar').style.display = hasTopBar ? 'flex' : 'none';
   // Refresh dynamic screens on show
-  if (id === 'garageScreen' && G.initialized) buildGarage();
-  if (id === 'shopScreen'   && G.initialized) buildShop();
+  if (id === 'garageScreen'    && G.initialized) buildGarage();
+  if (id === 'shopScreen'      && G.initialized) buildShop();
   if (id === 'leaderboardScreen' && G.initialized) buildLeaderboard();
-  if (id === 'menuScreen'   && G.initialized) updateMenuDisplay();
+  if (id === 'settingsScreen'  && G.initialized) buildSettings();
+  if (id === 'menuScreen'      && G.initialized) updateMenuDisplay();
   if (id) {
     const screenEl = document.getElementById(id);
     screenEl?.classList.add('active');
@@ -1927,7 +2000,10 @@ function startGame() {
   G.currentVehicle = vid;
   G.ownedVehicles = [vid];
   G.vehicleColors[vid] = VEHICLES[vid].defaultColor;
+  getVehicleUpgrades(vid);
+  getVehicleCosmetics(vid);
   G.initialized = true;
+  saveGame();
 
   showScreen('menuScreen');
   document.getElementById('topBar').style.display = 'flex';
@@ -1985,14 +2061,15 @@ function buildGarage() {
   const vd = VEHICLES[G.currentVehicle];
   document.getElementById('garVehicleName').textContent = `${vd.emoji} ${vd.name}`;
 
-  const eng = G.upgrades.engine, whl = G.upgrades.wheels, gr = G.upgrades.gears;
+  const uveh = getVehicleUpgrades(G.currentVehicle);
+  const eng = uveh.engine, whl = uveh.wheels, gr = uveh.gears;
   const effSpd = (vd.spd + eng*0.6 + gr*0.8).toFixed(1);
   const effHan = (vd.han + whl*0.002).toFixed(3);
   document.getElementById('garVehicleStats').innerHTML = `
     <div class="gar-stat-item"><div class="gar-stat-val">${effSpd}</div><div>Speed</div></div>
     <div class="gar-stat-item"><div class="gar-stat-val">${effHan}</div><div>Handling</div></div>
-    <div class="gar-stat-item"><div class="gar-stat-val">${G.upgrades.engine}</div><div>Engine Lvl</div></div>
-    <div class="gar-stat-item"><div class="gar-stat-val">${G.upgrades.wheels}</div><div>Wheel Lvl</div></div>
+    <div class="gar-stat-item"><div class="gar-stat-val">${uveh.engine}</div><div>Engine Lvl</div></div>
+    <div class="gar-stat-item"><div class="gar-stat-val">${uveh.wheels}</div><div>Wheel Lvl</div></div>
   `;
 
   // Color grid
@@ -2012,6 +2089,7 @@ function buildGarage() {
       document.querySelectorAll('.color-swatch').forEach(s=>s.classList.remove('active'));
       swatch.classList.add('active');
       updateTopBar();
+      saveGame();
       notify(`Painted ${c.name}! -5 🪙`, 'good');
       buildGarage();
     });
@@ -2022,7 +2100,7 @@ function buildGarage() {
   const upList = document.getElementById('upgradesList');
   upList.innerHTML = '';
   UPGRADES.forEach(upg => {
-    const level = G.upgrades[upg.id] || 0;
+    const level = getVehicleUpgrades(G.currentVehicle)[upg.id] || 0;
     const maxed = level >= upg.max;
     const dots = Array(upg.max).fill(0).map((_,i)=>`<div class="lvl-dot${i<level?' on':''}"></div>`).join('');
     const row = document.createElement('div');
@@ -2047,8 +2125,9 @@ function buildGarage() {
   // Cosmetics
   const cosmGrid = document.getElementById('cosmeticGrid');
   cosmGrid.innerHTML = '';
+  const vCosmetics = getVehicleCosmetics(G.currentVehicle);
   COSMETICS.forEach(co => {
-    const owned = G.cosmetics.includes(co.id);
+    const owned = vCosmetics.includes(co.id);
     const btn = document.createElement('div');
     btn.className = 'cosm-btn' + (owned?' owned':'');
     btn.innerHTML = `${co.emoji} ${co.name} ${owned ? '✓' : '— '+co.cost+' 🪙'}`;
@@ -2056,8 +2135,9 @@ function buildGarage() {
       btn.addEventListener('click', () => {
         if (G.coins < co.cost) { notify('Not enough coins!','bad'); return; }
         G.coins -= co.cost;
-        G.cosmetics.push(co.id);
+        getVehicleCosmetics(G.currentVehicle).push(co.id);
         updateTopBar();
+        saveGame();
         notify(`${co.name} equipped! -${co.cost} 🪙`,'good');
         buildGarage();
       });
@@ -2068,12 +2148,14 @@ function buildGarage() {
 
 function buyUpgrade(id) {
   const upg = UPGRADES.find(u=>u.id===id);
-  const level = G.upgrades[id] || 0;
+  const upgrades = getVehicleUpgrades(G.currentVehicle);
+  const level = upgrades[id] || 0;
   if (level >= upg.max) { notify('Already maxed out!','bad'); return; }
   if (G.coins < upg.cost) { notify(`Need ${upg.cost} 🪙!`,'bad'); return; }
   G.coins -= upg.cost;
-  G.upgrades[id] = level + 1;
+  upgrades[id] = level + 1;
   updateTopBar();
+  saveGame();
   notify(`${upg.name} upgraded to Level ${level+1}! -${upg.cost} 🪙`,'good');
   buildGarage();
 }
@@ -2115,8 +2197,10 @@ function buyVehicle(vid) {
   G.coins -= vd.cost;
   G.ownedVehicles.push(vid);
   G.vehicleColors[vid] = vd.defaultColor;
-  equipVehicle(vid);
+  getVehicleUpgrades(vid);
+  getVehicleCosmetics(vid);
   notify(`${vd.name} purchased! -${vd.cost} 🪙`,'good');
+  equipVehicle(vid);
 }
 
 function equipVehicle(vid) {
@@ -2125,6 +2209,7 @@ function equipVehicle(vid) {
   buildShop();
   buildGarage();
   updateMenuDisplay();
+  saveGame();
   notify(`${VEHICLES[vid].name} equipped!`,'good');
 }
 
@@ -2146,6 +2231,69 @@ function buildLeaderboard() {
       <div class="lb-wins">${row.wins} wins</div>
     </div>`
   ).join('');
+}
+
+// ==============================
+// SETTINGS
+// ==============================
+function buildSettings() {
+  const savedAt = (() => {
+    try {
+      const raw = localStorage.getItem('cc8c_save');
+      if (!raw) return null;
+      const d = JSON.parse(raw)._savedAt;
+      return d ? new Date(d).toLocaleString() : null;
+    } catch(e) { return null; }
+  })();
+  document.getElementById('settingsContent').innerHTML = `
+    <div class="set-section">
+      <div class="set-sec-title">👤 Player Profile</div>
+      <div style="margin-bottom:12px;font-size:.85em;color:#aaa">Display name shown on leaderboard</div>
+      <input type="text" class="set-input" id="nameInput" value="${G.playerName}" maxlength="20" placeholder="Enter name...">
+      <button class="btn btn-sm btn-green" style="margin-top:12px;width:100%" onclick="saveName()">Save Name</button>
+    </div>
+    <div class="set-section">
+      <div class="set-sec-title">💾 Save Data</div>
+      <div style="font-size:.85em;color:#aaa;margin-bottom:12px">${savedAt ? 'Last saved: '+savedAt : 'No save data found'}</div>
+      <button class="btn btn-sm" style="width:100%" onclick="saveGame(false);buildSettings()">💾 Save Now</button>
+    </div>
+    <div class="set-section">
+      <div class="set-sec-title">📊 Stats</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:.85em">
+        <div style="text-align:center;background:rgba(255,255,255,.05);padding:12px;border-radius:12px">
+          <div style="font-size:1.5em;font-weight:900;color:#ffcc02">${G.stats.racesWon}</div>
+          <div style="color:#888">Races Won</div>
+        </div>
+        <div style="text-align:center;background:rgba(255,255,255,.05);padding:12px;border-radius:12px">
+          <div style="font-size:1.5em;font-weight:900;color:#ffcc02">${G.stats.totalCoins}</div>
+          <div style="color:#888">Coins Earned</div>
+        </div>
+        <div style="text-align:center;background:rgba(255,255,255,.05);padding:12px;border-radius:12px">
+          <div style="font-size:1.5em;font-weight:900;color:#ffcc02">${G.level}</div>
+          <div style="color:#888">Level</div>
+        </div>
+        <div style="text-align:center;background:rgba(255,255,255,.05);padding:12px;border-radius:12px">
+          <div style="font-size:1.5em;font-weight:900;color:#ffcc02">${G.ownedVehicles.length}</div>
+          <div style="color:#888">Vehicles</div>
+        </div>
+      </div>
+    </div>
+    <div class="set-section">
+      <div class="set-sec-title">⚠️ Danger Zone</div>
+      <div style="font-size:.8em;color:#888;margin-bottom:12px">Erases all progress permanently</div>
+      <button class="btn btn-sm btn-red" style="width:100%" onclick="resetGame()">🗑️ Reset All Data</button>
+    </div>
+    <div style="height:20px"></div>
+  `;
+}
+
+function saveName() {
+  const input = document.getElementById('nameInput');
+  const name = (input.value || '').trim();
+  if (!name) { notify('Name cannot be empty!', 'bad'); return; }
+  G.playerName = name;
+  updateTopBar();
+  saveGame(false);
 }
 
 // ==============================
@@ -2207,9 +2355,19 @@ function init() {
         setTimeout(() => {
           initThreeJS();
           buildStarterCards();
-          // Pre-select default difficulty
           document.querySelector('.diff-med').classList.add('sel');
-          showScreen('welcomeScreen');
+          if (loadGame()) {
+            document.getElementById('topBar').style.display = 'flex';
+            buildGarage();
+            buildShop();
+            buildLeaderboard();
+            buildArenaCards();
+            showScreen('menuScreen');
+            updateMenuDisplay();
+            notify('Welcome back, ' + G.playerName + '! 🏁', 'good');
+          } else {
+            showScreen('welcomeScreen');
+          }
         }, 300);
       }, 400);
     }
