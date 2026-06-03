@@ -251,14 +251,12 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 #mobileCtrl{position:fixed;bottom:0;left:0;right:0;height:210px;display:none;z-index:200;touch-action:none}
 @media(hover:none){#mobileCtrl.active{display:block}}
 @media(hover:none){.hud-bl{bottom:220px}.hud-br{display:none}}
-#dpad-left{position:absolute;bottom:18px;left:18px;width:210px;height:210px}
-#dpad-right{position:absolute;bottom:18px;right:18px;width:210px;height:210px}
 .dpad-btn{position:absolute;width:82px;height:82px;background:rgba(0,0,0,.52);border:3px solid rgba(255,255,255,.38);border-radius:16px;color:#fff;font-size:34px;display:flex;align-items:center;justify-content:center;user-select:none;-webkit-user-select:none;touch-action:none;cursor:pointer}
 .dpad-btn:active{background:rgba(255,107,53,.55);border-color:rgba(255,107,53,.9)}
-.dpad-up{top:0;left:50%;transform:translateX(-50%)}
-.dpad-down{bottom:0;left:50%;transform:translateX(-50%)}
-.dpad-left{left:0;top:50%;transform:translateY(-50%)}
-.dpad-right{right:0;top:50%;transform:translateY(-50%)}
+#btnLeft{bottom:60px;left:16px}
+#btnRight{bottom:60px;left:110px}
+#btnUp{bottom:112px;right:16px}
+#btnDown{bottom:16px;right:16px}
 /* Settings */
 #settingsScreen{background:linear-gradient(135deg,#0f0c29,#1a1a3e);padding-top:75px;overflow:hidden;align-items:stretch;justify-content:flex-start}
 .set-section{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:20px;margin-bottom:18px}
@@ -523,14 +521,10 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 
 <!-- Mobile controls -->
 <div id="mobileCtrl">
-  <div id="dpad-left">
-    <div id="btnLeft"  class="dpad-btn dpad-left">◀</div>
-    <div id="btnRight" class="dpad-btn dpad-right">▶</div>
-  </div>
-  <div id="dpad-right">
-    <div id="btnUp"   class="dpad-btn dpad-up">▲</div>
-    <div id="btnDown" class="dpad-btn dpad-down">▼</div>
-  </div>
+  <div id="btnLeft"  class="dpad-btn">◀</div>
+  <div id="btnRight" class="dpad-btn">▶</div>
+  <div id="btnUp"    class="dpad-btn">▲</div>
+  <div id="btnDown"  class="dpad-btn">▼</div>
 </div>
 
 <!-- Notification -->
