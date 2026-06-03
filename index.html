@@ -3624,32 +3624,29 @@ function renderCharSVG(cfg, opts) {
   const cx = 38;
   const bx = cx - bodyW / 2;
 
-  // HAT — drawn before head; parts above y=14 fully visible; brim sticks out sideways beyond head
+  // HAT — drawn AFTER head so it covers the forehead; eyes/mouth drawn after hat so face stays visible
   let hatSVG = '';
   if (hat === 'cap') {
-    // Dome ellipse: top at y=-3, bottom at y=17; visible above head top (y=14) = 14 units
-    // Brim: y=13-18, width 38 → sticks way out beyond head (at y=15 head is only ±5 wide)
+    // Dome covers head top; brim sits at forehead level (y=16-22), sticks wide past head sides
     hatSVG = `
       <ellipse cx="${cx}" cy="7" rx="13" ry="10" fill="${shirt}"/>
-      <rect x="${cx-19}" y="13" width="38" height="5" rx="2.5" fill="${shirt}"/>`;
+      <rect x="${cx-19}" y="16" width="38" height="6" rx="2.5" fill="${shirt}"/>`;
   } else if (hat === 'cowboy') {
-    // Crown: y=0-17, 20px wide; brim ellipse at cy=17 sticks ±23 out (head at y=17 is ±sqrt(169-100)=±8.3)
+    // Crown y=0-19 covers top+forehead; wide brim at cy=19 sits at forehead level
     hatSVG = `
-      <rect x="${cx-10}" y="0" width="20" height="17" rx="4" fill="#7B3F00"/>
-      <ellipse cx="${cx}" cy="17" rx="23" ry="4.5" fill="#5C2E00"/>`;
+      <rect x="${cx-10}" y="0" width="20" height="19" rx="4" fill="#7B3F00"/>
+      <ellipse cx="${cx}" cy="19" rx="23" ry="4.5" fill="#5C2E00"/>`;
   } else if (hat === 'helmet') {
-    // Large ellipse: cx=38,cy=21,rx=17,ry=16 → top y=5, bottom y=37
-    // Head circle drawn on top creates the face opening; helmet rim visible ±4 beyond head
-    // Visor drawn before head (covered by head circle = shows as helmet "chin bar" peek)
+    // Full shell covers whole head; visor at forehead level; eyes drawn after still show through
     hatSVG = `
       <ellipse cx="${cx}" cy="21" rx="17" ry="16" fill="#c0392b"/>
-      <rect x="${cx-15}" y="28" width="30" height="5" rx="2" fill="#9b2b2b"/>
-      <rect x="${cx-12}" y="24" width="24" height="7" rx="2" fill="rgba(120,210,255,0.42)"/>`;
+      <rect x="${cx-13}" y="21" width="26" height="8" rx="2" fill="rgba(100,190,255,0.45)"/>
+      <rect x="${cx-15}" y="33" width="30" height="4" rx="2" fill="#9b2b2b"/>`;
   } else if (hat === 'beanie') {
-    // Dome: cy=8, ry=12 → bottom y=20; visible above head: 14 units; cuff at y=16-22
+    // Dome covers head top; cuff y=17-24 sits at forehead level
     hatSVG = `
       <ellipse cx="${cx}" cy="8" rx="13" ry="12" fill="${shirt}"/>
-      <rect x="${cx-13}" y="16" width="26" height="6" rx="3" fill="${shirt}"/>
+      <rect x="${cx-13}" y="17" width="26" height="7" rx="3" fill="${shirt}"/>
       <circle cx="${cx}" cy="1" r="4" fill="rgba(255,255,255,0.55)"/>`;
   }
 
@@ -3697,8 +3694,8 @@ function renderCharSVG(cfg, opts) {
   const jc = jump ? ' char-jumping' : '';
 
   return `<svg class="char-figure${jc}" width="${w}" height="${h}" viewBox="0 0 90 120" xmlns="http://www.w3.org/2000/svg">
-    ${hatSVG}
     <circle cx="${cx}" cy="27" r="13" fill="${skin}"/>
+    ${hatSVG}
     ${eyes}${mouth}
     <rect x="${cx-3}" y="39" width="6" height="5" fill="${skin}"/>
     <rect x="${bx}" y="43" width="${bodyW}" height="30" rx="6" fill="${shirt}"/>
