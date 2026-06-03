@@ -580,6 +580,8 @@ const ARENAS = [
    desc:'Smooth fast tarmac — race cars dominate! Top speed rules here.'},
   {id:'practice', name:'Open Practice',     emoji:'🟤', lock:0, color:0x8B7355, fogColor:0x9e8e7a, sky:0xb8c8e0,
    desc:'Huge open arena — drive free! Jumps, rocks and trees everywhere.'},
+  {id:'snow', name:'Snow Circuit', emoji:'❄️', lock:4, color:0xe8f4fc, fogColor:0xd0e8f8, sky:0xbdd9f2,
+   desc:'Icy oval circuit — slide around every corner! Speed makes you drift more.'},
 ];
 
 // Returns physics multipliers for the current race surface
@@ -619,6 +621,7 @@ function getSurfaceModifiers(arenaIdx, vehicleId) {
   if (arenaIdx === 5) return isMoto
     ? {handling:1.10, accel:0.80, maxSpd:0.88, drag:0.88} // moto on packed dirt: decent but not great
     : {handling:1.05, accel:0.90, maxSpd:0.95, drag:0.90};
+  if (arenaIdx === 6) return {handling: 0.60, accel: 0.88, maxSpd: 1.02, drag: 0.93, snowSlide: true};
   return {handling:1.0, accel:1.0, maxSpd:1.0, drag:0.88};
 }
 
@@ -995,32 +998,34 @@ const TRACK_WIDTH = 72;
 const TRACK_SAMPLES = [];
 const PRACTICE_R = 400;       // Open Practice arena outer wall radius
 const PRACTICE_CIRCUIT_R = 240; // AI lap path radius inside practice arena
-
-// Precompute track samples
-(function() {
-  for (let i = 0; i < 600; i++) {
-    const t = (i / 600) * Math.PI * 2;
-    TRACK_SAMPLES.push({
-      t,
-      x: TRACK_R * Math.sin(t),
-      z: TRACK_R / 2 * Math.sin(2 * t),
-    });
-  }
-})();
+const SNOW_RX = 320;          // Snow oval x-radius
+const SNOW_RZ = 200;          // Snow oval z-radius
+let _raceArena = 0;           // active arena index (set before each race)
 
 function trackPoint(t) {
-  return {
-    x: TRACK_R * Math.sin(t),
-    z: TRACK_R / 2 * Math.sin(2 * t),
-  };
+  if (_raceArena === 6) return { x: SNOW_RX * Math.cos(t), z: SNOW_RZ * Math.sin(t) };
+  return { x: TRACK_R * Math.sin(t), z: TRACK_R / 2 * Math.sin(2 * t) };
 }
 
 function trackTangent(t) {
-  const dx = TRACK_R * Math.cos(t);
-  const dz = TRACK_R * Math.cos(2 * t);
+  let dx, dz;
+  if (_raceArena === 6) { dx = -SNOW_RX * Math.sin(t); dz = SNOW_RZ * Math.cos(t); }
+  else { dx = TRACK_R * Math.cos(t); dz = TRACK_R * Math.cos(2 * t); }
   const len = Math.sqrt(dx*dx + dz*dz);
   return {x: dx/len, z: dz/len};
 }
+
+function rebuildTrackSamples(arenaIdx) {
+  _raceArena = arenaIdx || 0;
+  TRACK_SAMPLES.length = 0;
+  for (let i = 0; i < 600; i++) {
+    const t = (i / 600) * Math.PI * 2;
+    const p = trackPoint(t);
+    TRACK_SAMPLES.push({ t, x: p.x, z: p.z });
+  }
+}
+
+rebuildTrackSamples(0);
 
 // Find nearest track sample to world position, constrained near prevT
 function nearestTrackT(wx, wz, prevT) {
@@ -1087,6 +1092,8 @@ class CarEntity {
     this.stuckTimer = 0;
     this.airY = 0;
     this.airVY = 0;
+    this.vx = 0; // snow slide velocity
+    this.vz = 0;
 
     // AI
     this.aiLookahead = 0.18;
@@ -1141,8 +1148,19 @@ class CarEntity {
 
     // Move
     const mdt = dt * 60;
-    this.x += Math.sin(this.heading) * this.speed * mdt * 0.13;
-    this.z += Math.cos(this.heading) * this.speed * mdt * 0.13;
+    if (sm.snowSlide) {
+      const tvx = Math.sin(this.heading) * this.speed * 0.13;
+      const tvz = Math.cos(this.heading) * this.speed * 0.13;
+      const grip60 = Math.max(0.07, 0.38 - Math.abs(this.speed) * 0.016);
+      const blendF = 1 - Math.pow(1 - grip60, dt * 60);
+      this.vx += (tvx - this.vx) * blendF;
+      this.vz += (tvz - this.vz) * blendF;
+      this.x += this.vx * mdt;
+      this.z += this.vz * mdt;
+    } else {
+      this.x += Math.sin(this.heading) * this.speed * mdt * 0.13;
+      this.z += Math.cos(this.heading) * this.speed * mdt * 0.13;
+    }
 
     // Boundary + lap tracking
     let delta;
@@ -1203,7 +1221,7 @@ class CarEntity {
           this.speed *= -0.3; // bounce
           this.takeDamage(1);
           if (this.isPlayer) {
-            const label = obs.label === 'rock' ? 'Rock hit! 🪨' : 'Tree hit! 🌲';
+            const label = obs.label === 'rock' ? 'Rock hit! 🪨' : obs.label === 'snowman' ? 'Snowman hit! ☃️' : 'Tree hit! 🌲';
             notify(label, 'bad');
           }
           break;
@@ -1297,8 +1315,19 @@ class CarEntity {
 
     // Move
     const mdt = dt * 60;
-    this.x += Math.sin(this.heading) * this.speed * mdt * 0.13;
-    this.z += Math.cos(this.heading) * this.speed * mdt * 0.13;
+    if (sm.snowSlide) {
+      const tvx = Math.sin(this.heading) * this.speed * 0.13;
+      const tvz = Math.cos(this.heading) * this.speed * 0.13;
+      const grip60 = Math.max(0.10, 0.42 - Math.abs(this.speed) * 0.016); // AI has slightly more grip
+      const blendF = 1 - Math.pow(1 - grip60, dt * 60);
+      this.vx += (tvx - this.vx) * blendF;
+      this.vz += (tvz - this.vz) * blendF;
+      this.x += this.vx * mdt;
+      this.z += this.vz * mdt;
+    } else {
+      this.x += Math.sin(this.heading) * this.speed * mdt * 0.13;
+      this.z += Math.cos(this.heading) * this.speed * mdt * 0.13;
+    }
 
     // Track progress + boundary
     let delta;
@@ -1876,14 +1905,15 @@ function buildScene(arenaIdx) {
   // Start/finish line
   addStartFinish();
 
-  // Grandstands
-  addGrandstands();
+  // Grandstands (skip for snow — they'd be inside the oval)
+  if (arenaIdx !== 6) addGrandstands();
 
   // Arena-specific effects
   if (arenaIdx === 1) addSandDunes();
   if (arenaIdx === 2) addWaterPuddles();
   if (arenaIdx === 3) addMudPits();
   if (arenaIdx === 4) addAsphaltMarkings();
+  if (arenaIdx === 6) addSnowmen();
 }
 
 function buildPracticeArena() {
@@ -2057,7 +2087,7 @@ function buildRoad(arenaIdx) {
   roadGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
   roadGeo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
   roadGeo.setIndex(indices);
-  const roadMat = new THREE.MeshLambertMaterial({color: arenaIdx===1?0xd4a573:0x3d3d3d});
+  const roadMat = new THREE.MeshLambertMaterial({color: arenaIdx===1?0xd4a573:arenaIdx===6?0xd8eaf8:0x3d3d3d});
   const road = new THREE.Mesh(roadGeo, roadMat);
   road.receiveShadow = true;
   road.userData.sceneObj = true;
@@ -2090,7 +2120,7 @@ function buildRoad(arenaIdx) {
     lg.setAttribute('uv',new THREE.Float32BufferAttribute(lUv,2));
     lg.setAttribute('normal',new THREE.Float32BufferAttribute(lNrm,3));
     lg.setIndex(lIdx);
-    const lm = new THREE.Mesh(lg, new THREE.MeshLambertMaterial({color:0xffff00}));
+    const lm = new THREE.Mesh(lg, new THREE.MeshLambertMaterial({color:arenaIdx===6?0x88ccff:0xffff00}));
     lm.userData.sceneObj=true;
     scene.add(lm);
   }
@@ -2123,6 +2153,7 @@ function buildRoad(arenaIdx) {
 
 // Returns true if track parameter t is near a figure-8 crossing (skip barriers there)
 function nearCrossing(t, thresh = 0.25) {
+  if (_raceArena === 6) return false; // oval has no crossing
   const mod = ((t % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
   return mod < thresh || mod > Math.PI * 2 - thresh || Math.abs(mod - Math.PI) < thresh;
 }
@@ -2165,7 +2196,7 @@ function addCurbsAndBarriers(arenaIdx) {
       geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
       geo.setAttribute('normal',   new THREE.Float32BufferAttribute(nrm, 3));
       geo.setIndex(idx);
-      const color = seg % 2 === 0 ? 0xdd1111 : 0xffffff;
+      const color = seg % 2 === 0 ? (arenaIdx===6?0x2299dd:0xdd1111) : 0xffffff;
       const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({color, side: THREE.DoubleSide}));
       m.userData.sceneObj = true;
       scene.add(m);
@@ -2173,7 +2204,7 @@ function addCurbsAndBarriers(arenaIdx) {
   }
 
   // --- CONCRETE BARRIER WALLS (inner face + top stripe) ---
-  const wallColor = arenaIdx === 1 ? 0xd6c494 : 0xb8b8b8;
+  const wallColor = arenaIdx === 1 ? 0xd6c494 : arenaIdx === 6 ? 0xaacce0 : 0xb8b8b8;
   for (const side of [-1, 1]) {
     const wallCenterOff = side * (roadW / 2 + curbW + wallD / 2);
 
@@ -2416,7 +2447,7 @@ function addGrandstands() {
 function addTrees(arenaIdx) {
   const rng = mulberry32(12345);
   const trunkMat = new THREE.MeshLambertMaterial({color:arenaIdx===1?0xc2a46e:0x5d4037});
-  const leafMat  = new THREE.MeshLambertMaterial({color:arenaIdx===1?0xc2a46e:0x2d7a3a});
+  const leafMat  = new THREE.MeshLambertMaterial({color:arenaIdx===1?0xc2a46e:arenaIdx===6?0xddeeff:0x2d7a3a});
 
   function placeTree(x, z, h, isObstacle) {
     const trunkR = isObstacle ? 1.2 : 0.5;
@@ -2642,6 +2673,65 @@ function addAsphaltMarkings() {
   }
 }
 
+function addSnowmen() {
+  const rng = mulberry32(55555);
+  const wMat  = new THREE.MeshLambertMaterial({color:0xf0f6ff});
+  const bMat  = new THREE.MeshLambertMaterial({color:0x111111});
+  const oMat  = new THREE.MeshLambertMaterial({color:0xff6a00});
+  const brMat = new THREE.MeshLambertMaterial({color:0x5c3317});
+
+  function placeSnowman(x, z) {
+    // Three body spheres: bottom, middle, head
+    [[2.0, 2.0], [1.4, 5.6], [1.0, 8.4]].forEach(([r, y]) => {
+      const s = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), wMat);
+      s.position.set(x, y, z); s.userData.sceneObj = true; scene.add(s);
+    });
+    // Hat brim
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.3, 0.25, 10), bMat);
+    brim.position.set(x, 9.45, z); brim.userData.sceneObj = true; scene.add(brim);
+    // Hat crown
+    const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.9, 1.8, 10), bMat);
+    crown.position.set(x, 10.5, z); crown.userData.sceneObj = true; scene.add(crown);
+    // Nose (orange sphere)
+    const nose = new THREE.Mesh(new THREE.SphereGeometry(0.26, 7, 5), oMat);
+    nose.position.set(x + 1.0, 8.4, z); nose.userData.sceneObj = true; scene.add(nose);
+    // Eyes
+    [[-0.5, 0.6], [0.5, 0.6]].forEach(([ex, ez]) => {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.18, 6, 5), bMat);
+      eye.position.set(x + ex * 0.7, 8.85, z + ez); eye.userData.sceneObj = true; scene.add(eye);
+    });
+    // Arms
+    const armGeo = new THREE.CylinderGeometry(0.10, 0.10, 3.8, 6);
+    [-1, 1].forEach(side => {
+      const arm = new THREE.Mesh(armGeo, brMat);
+      arm.rotation.z = side * 0.45;
+      arm.position.set(x + side * 2.3, 5.9, z);
+      arm.userData.sceneObj = true; scene.add(arm);
+    });
+    // Buttons on middle sphere
+    for (let b = 0; b < 3; b++) {
+      const btn = new THREE.Mesh(new THREE.SphereGeometry(0.18, 6, 5), bMat);
+      btn.position.set(x + 1.38, 7.2 - b * 0.7, z);
+      btn.userData.sceneObj = true; scene.add(btn);
+    }
+  }
+
+  const count = 14;
+  for (let i = 0; i < count; i++) {
+    const t = (i / count) * Math.PI * 2 + (rng() - 0.5) * 0.28;
+    const pt = trackPoint(t);
+    const tang = trackTangent(t);
+    const px = -tang.z; // lateral direction x
+    const pz =  tang.x; // lateral direction z
+    const side = i % 2 === 0 ? 1 : -1;
+    const off = (10 + rng() * 18) * side;
+    const sx = pt.x + px * off;
+    const sz = pt.z + pz * off;
+    placeSnowman(sx, sz);
+    treeObstacles.push({x: sx, z: sz, r: 2.8, label: 'snowman'});
+  }
+}
+
 // Simple seeded RNG
 function mulberry32(a) {
   return function() {
@@ -2675,6 +2765,9 @@ function startRace() {
   const arenaIdx = G.raceConfig.arena;
   const diff = G.raceConfig.difficulty;
 
+  // Rebuild track samples for the chosen arena (oval vs figure-8)
+  rebuildTrackSamples(arenaIdx);
+
   // Show canvas
   document.getElementById('gc').style.display = 'block';
   showScreen(null);
@@ -2698,6 +2791,10 @@ function startRace() {
     startT = 0.15; // east side of circle, offset away from 0/2π to keep lap math clean
     laneOffsets = [0, -16, 16, -32, 32];
     startTs = [startT, startT - 0.06, startT - 0.06, startT - 0.12, startT - 0.12];
+  } else if (arenaIdx === 6) {
+    startT = Math.PI * 0.5; // top straight of oval; finish line at t=0 (right curve)
+    laneOffsets = [0, -16, 16, -32, 32];
+    startTs = [startT, startT - 0.05, startT - 0.05, startT - 0.10, startT - 0.10];
   } else {
     startT = Math.PI * 0.5; // mid right-loop; finish line is at t=0 (center crossing)
     laneOffsets = [0, -16, 16, -32, 32];
@@ -2716,7 +2813,9 @@ function startRace() {
       ? ['moto','sports','muscle','rally','moto','sports']
       : G.raceConfig.arena === 5
         ? ['monster','offroad','pickup','muscle','superMonster','rally']
-        : ['muscle','rally','moto','pickup','compact','offroad'];
+        : G.raceConfig.arena === 6
+          ? ['rally','sports','muscle','compact','offroad','pickup']
+          : ['muscle','rally','moto','pickup','compact','offroad'];
   const aiColors = ['#e74c3c','#3498db','#f39c12','#9b59b6'];
   const diffMults = [0.58, 0.72, 0.88, 1.02];
   const aiMult = diffMults[diff];
@@ -3108,6 +3207,30 @@ function updateMinimap() {
       ctx.beginPath();
       ctx.arc(sx, sy, c===playerCar?3.5:2.5, 0, Math.PI*2);
       ctx.fillStyle = c===playerCar ? '#ffcc02' : '#ff4444';
+      ctx.fill();
+    });
+  } else if (G.raceConfig.arena === 6) {
+    // Snow oval
+    const scaleX = 120 / (SNOW_RX * 2.2);
+    const scaleZ = 80 / (SNOW_RZ * 2.2);
+    ctx.strokeStyle = '#88ccff';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    for (let i = 0; i <= 200; i++) {
+      const t = (i / 200) * Math.PI * 2;
+      const p = trackPoint(t);
+      const sx = cx + p.x * scaleX;
+      const sy = cy + p.z * scaleZ;
+      if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+    }
+    ctx.stroke();
+    allCars.forEach(c => {
+      if (c.dnf) return;
+      const sx = cx + c.x * scaleX;
+      const sy = cy + c.z * scaleZ;
+      ctx.beginPath();
+      ctx.arc(sx, sy, c === playerCar ? 3.5 : 2.5, 0, Math.PI * 2);
+      ctx.fillStyle = c === playerCar ? '#ffcc02' : '#ff4444';
       ctx.fill();
     });
   } else {
