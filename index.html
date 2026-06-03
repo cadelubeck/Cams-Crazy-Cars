@@ -1464,7 +1464,7 @@ function buildCarMesh(vehicleId, colorHex, cosmetics=[]) {
     g.add(windscreen);
 
     // Handlebars
-    const handlebar = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.1, 0.1), darkMat);
+    const handlebar = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.1, 0.1), darkMat);
     handlebar.position.set(0, frameY + frameH / 2 + 0.72, fWheelZ + 0.52);
     g.add(handlebar);
 
@@ -1489,9 +1489,9 @@ function buildCarMesh(vehicleId, colorHex, cosmetics=[]) {
     tl.position.set(0, frameY + 0.28, rWheelZ + 0.18);
     g.add(tl);
 
-    // Exhaust pipe
+    // Exhaust pipe — runs front-to-back along the right side
     const exhPipe = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 2.6, 8), darkMat);
-    exhPipe.rotation.z = Math.PI / 2;
+    exhPipe.rotation.x = Math.PI / 2;
     exhPipe.position.set(frameW / 2 + 0.06, wRad + 0.2, 0.45);
     g.add(exhPipe);
 
