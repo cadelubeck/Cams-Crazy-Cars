@@ -248,12 +248,11 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 .cross-nav-btn:hover{background:rgba(255,107,53,.15);border-color:#ff6b35;color:#fff}
 .cross-nav-btn.active{background:rgba(255,107,53,.25);border-color:#ff6b35;color:#ff6b35;cursor:default;pointer-events:none}
 /* Mobile */
-#mobileCtrl{position:fixed;bottom:0;left:0;right:0;display:none;justify-content:space-between;align-items:flex-end;padding:0 12px 16px;z-index:200;pointer-events:none}
-@media(hover:none){#mobileCtrl.active{display:flex}}
-@media(hover:none){.hud-bl{bottom:110px}.hud-br{display:none}}
-.mctrl-left,.mctrl-right{display:flex;gap:6px}
-.mc-btn{background:rgba(0,0,0,.45);border:2px solid rgba(255,255,255,.25);border-radius:14px;color:#fff;font-size:1.2em;width:58px;height:58px;display:flex;align-items:center;justify-content:center;cursor:pointer;pointer-events:all;touch-action:none;-webkit-tap-highlight-color:transparent;transition:background .1s}
-.mc-btn:active,.mc-btn.pressed{background:rgba(255,107,53,.5);border-color:#ff6b35}
+#mobileCtrl{position:fixed;bottom:0;left:0;right:0;height:210px;display:none;z-index:200;touch-action:none}
+@media(hover:none){#mobileCtrl.active{display:block}}
+@media(hover:none){.hud-bl{bottom:220px}.hud-br{display:none}}
+#joystickBase{position:absolute;width:130px;height:130px;border-radius:50%;background:rgba(0,0,0,.40);border:2px solid rgba(255,255,255,.22);display:none;pointer-events:none}
+#joystickKnob{position:absolute;width:56px;height:56px;border-radius:50%;background:rgba(255,107,53,.85);border:2px solid rgba(255,255,255,.55);box-shadow:0 0 16px rgba(255,107,53,.6);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none}
 /* Settings */
 #settingsScreen{background:linear-gradient(135deg,#0f0c29,#1a1a3e);padding-top:75px;overflow:hidden;align-items:stretch;justify-content:flex-start}
 .set-section{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:20px;margin-bottom:18px}
@@ -518,14 +517,7 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 
 <!-- Mobile controls -->
 <div id="mobileCtrl">
-  <div class="mctrl-left">
-    <div class="mc-btn" id="mcLeft" ontouchstart="mobileKey('a',true,event)" ontouchend="mobileKey('a',false,event)">◀</div>
-    <div class="mc-btn" id="mcRight" ontouchstart="mobileKey('d',true,event)" ontouchend="mobileKey('d',false,event)">▶</div>
-  </div>
-  <div class="mctrl-right">
-    <div class="mc-btn" id="mcDown" ontouchstart="mobileKey('s',true,event)" ontouchend="mobileKey('s',false,event)">⬇</div>
-    <div class="mc-btn" id="mcUp" ontouchstart="mobileKey('w',true,event)" ontouchend="mobileKey('w',false,event)">⬆</div>
-  </div>
+  <div id="joystickBase"><div id="joystickKnob"></div></div>
 </div>
 
 <!-- Notification -->
@@ -537,16 +529,17 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 // DATA
 // ==============================
 const VEHICLES = {
-  tractor:    {name:'Farm Tractor',    emoji:'🚜', cost:150,  cat:'Tractor', spd:7,  acc:.22, han:.032, defaultColor:'#4a7c59'},
-  pickup:     {name:'Pickup Truck',    emoji:'🛻', cost:175,  cat:'Truck',   spd:9,  acc:.28, han:.038, defaultColor:'#c0392b'},
-  compact:    {name:'Compact Car',     emoji:'🏎️', cost:200,  cat:'Car',     spd:11, acc:.35, han:.048, defaultColor:'#2980b9'},
-  muscle:     {name:'Muscle Car',      emoji:'🚗', cost:350,  cat:'Car',     spd:13, acc:.38, han:.044, defaultColor:'#8e44ad'},
-  rally:      {name:'Rally Car',       emoji:'🚙', cost:450,  cat:'Car',     spd:14, acc:.42, han:.052, defaultColor:'#27ae60'},
-  sports:     {name:'Sports Car',      emoji:'🏎️', cost:500,  cat:'Car',     spd:16, acc:.46, han:.055, defaultColor:'#e74c3c'},
-  offroad:    {name:'Off-Road Truck',  emoji:'🚚', cost:600,  cat:'Truck',   spd:10, acc:.30, han:.040, defaultColor:'#e67e22'},
-  monster:    {name:'Monster Truck',   emoji:'🚛', cost:1000, cat:'Truck',   spd:11, acc:.28, han:.030, defaultColor:'#1abc9c'},
-  heavyTract: {name:'Heavy Tractor',   emoji:'🚜', cost:800,  cat:'Tractor', spd:8,  acc:.24, han:.028, defaultColor:'#7f8c8d'},
-  superTract: {name:'Super Tractor',   emoji:'🚜', cost:1500, cat:'Tractor', spd:12, acc:.32, han:.036, defaultColor:'#f39c12'},
+  tractor:      {name:'Farm Tractor',       emoji:'🚜', cost:150,  cat:'Tractor', spd:7,  acc:.22, han:.032, defaultColor:'#4a7c59'},
+  pickup:       {name:'Pickup Truck',       emoji:'🛻', cost:175,  cat:'Truck',   spd:9,  acc:.28, han:.038, defaultColor:'#c0392b'},
+  compact:      {name:'Compact Car',        emoji:'🏎️', cost:200,  cat:'Car',     spd:11, acc:.35, han:.048, defaultColor:'#2980b9'},
+  muscle:       {name:'Muscle Car',         emoji:'🚗', cost:350,  cat:'Car',     spd:13, acc:.38, han:.044, defaultColor:'#8e44ad'},
+  rally:        {name:'Rally Car',          emoji:'🚙', cost:450,  cat:'Car',     spd:14, acc:.42, han:.052, defaultColor:'#27ae60'},
+  sports:       {name:'Sports Car',         emoji:'🏎️', cost:500,  cat:'Car',     spd:16, acc:.46, han:.055, defaultColor:'#e74c3c'},
+  offroad:      {name:'Off-Road Truck',     emoji:'🚚', cost:600,  cat:'Truck',   spd:10, acc:.30, han:.040, defaultColor:'#e67e22'},
+  monster:      {name:'Monster Truck',      emoji:'🔥🚛', cost:1000, cat:'Truck',  spd:11, acc:.28, han:.030, defaultColor:'#1abc9c'},
+  heavyTract:   {name:'Heavy Tractor',      emoji:'⚙️🚜', cost:800,  cat:'Tractor', spd:8, acc:.24, han:.028, defaultColor:'#7f8c8d'},
+  superTract:   {name:'Super Tractor',      emoji:'💪🚜', cost:1500, cat:'Tractor', spd:12, acc:.32, han:.036, defaultColor:'#f39c12'},
+  superMonster: {name:'Super Monster Truck',emoji:'💀🚛', cost:2500, cat:'Truck',   spd:14, acc:.32, han:.028, defaultColor:'#8b0000'},
 };
 
 const ARENAS = [
@@ -702,85 +695,211 @@ let jumpZones = [];    // {x, z, r, boost} — ramps that send cars airborne
 // AUDIO ENGINE
 // ==============================
 let audioCtx = null;
+let engineProfile = 'car'; // 'car' | 'tractor' | 'race'
 let engineOsc = null, engineGain = null, engineFilter = null;
-let engineOsc2 = null; // harmonic layer
+let engineOsc2 = null;
+let engineOscGain = null;          // tractor: AM target node
+let engineLfo = null, engineLfoGain = null; // tractor: diesel chug LFO
+let turboOsc = null, turboGain = null;       // race: turbo whine
 
 function getAudioCtx() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  if (audioCtx.state === 'suspended') audioCtx.resume();
   return audioCtx;
 }
 
-function startEngineSound() {
-  stopEngineSound();
+function unlockAudio() {
   const ctx = getAudioCtx();
+  if (ctx.state === 'suspended') ctx.resume();
+}
+
+// Unlock on any first gesture so context is ready before race
+document.addEventListener('click', unlockAudio, {once: true});
+document.addEventListener('touchstart', unlockAudio, {once: true});
+document.addEventListener('keydown', unlockAudio, {once: true});
+
+function startEngineSound(vehicleId) {
+  // (engine sound removed)
+  const vd = vehicleId && VEHICLES[vehicleId];
+  const cat = vd ? vd.cat : 'Car';
+  const isRace = vehicleId === 'sports' || vehicleId === 'rally' || vehicleId === 'muscle';
+  engineProfile = cat === 'Tractor' ? 'tractor' : (isRace ? 'race' : 'car');
+
+  const ctx = getAudioCtx();
+  if (ctx.state === 'suspended') ctx.resume();
+
   engineFilter = ctx.createBiquadFilter();
   engineFilter.type = 'lowpass';
-  engineFilter.frequency.value = 600;
-  engineFilter.Q.value = 1.2;
-
   engineGain = ctx.createGain();
-  engineGain.gain.value = 0;
-
-  engineOsc = ctx.createOscillator();
-  engineOsc.type = 'sawtooth';
-  engineOsc.frequency.value = 55;
-  engineOsc.connect(engineFilter);
-
-  engineOsc2 = ctx.createOscillator();
-  engineOsc2.type = 'square';
-  engineOsc2.frequency.value = 110;
-  const g2 = ctx.createGain(); g2.gain.value = 0.18;
-  engineOsc2.connect(g2); g2.connect(engineFilter);
-
+  engineGain.gain.value = 0.06;
   engineFilter.connect(engineGain);
   engineGain.connect(ctx.destination);
-  engineOsc.start(); engineOsc2.start();
+
+  if (engineProfile === 'tractor') {
+    // Diesel tractor: deep, slow-revving, rhythmic chug
+    // Square wave at 90 Hz is rich in odd harmonics — sounds mechanical
+    engineFilter.frequency.value = 500;
+    engineFilter.Q.value = 1.5;
+
+    // Intermediate gain node — LFO will amplitude-modulate it for chug rhythm
+    engineOscGain = ctx.createGain();
+    engineOscGain.gain.value = 0.6;
+    engineOscGain.connect(engineFilter);
+
+    engineOsc = ctx.createOscillator();
+    engineOsc.type = 'square';      // square = hollow diesel rattle
+    engineOsc.frequency.value = 90;
+    engineOsc.connect(engineOscGain);
+
+    engineOsc2 = ctx.createOscillator();
+    engineOsc2.type = 'sawtooth';
+    engineOsc2.frequency.value = 45; // sub-octave adds weight
+    const g2 = ctx.createGain(); g2.gain.value = 0.5;
+    engineOsc2.connect(g2); g2.connect(engineOscGain);
+
+    // LFO deeply chops amplitude — this creates the "chug chug chug" rhythm
+    engineLfo = ctx.createOscillator();
+    engineLfo.type = 'sine';
+    engineLfo.frequency.value = 7; // 7 Hz = ~420 RPM diesel idle
+    engineLfoGain = ctx.createGain();
+    engineLfoGain.gain.value = 0.55; // deep chop — nearly silent between pulses
+    engineLfo.connect(engineLfoGain);
+    engineLfoGain.connect(engineOscGain.gain);
+
+    engineLfo.start(); engineOsc.start(); engineOsc2.start();
+
+  } else if (engineProfile === 'race') {
+    // Race engine: sharp, high-revving + prominent turbo whine
+    engineFilter.frequency.value = 1200;
+    engineFilter.Q.value = 3.5; // resonant peak gives it aggressive rasp
+
+    engineOsc = ctx.createOscillator();
+    engineOsc.type = 'sawtooth';
+    engineOsc.frequency.value = 150;
+    engineOsc.connect(engineFilter);
+
+    engineOsc2 = ctx.createOscillator();
+    engineOsc2.type = 'sawtooth';
+    engineOsc2.frequency.value = 303; // detuned from 2x for harsh rasp
+    const g2 = ctx.createGain(); g2.gain.value = 0.35;
+    engineOsc2.connect(g2); g2.connect(engineFilter);
+
+    // Turbo whine: high-pitched, bypasses main filter, very audible
+    turboOsc = ctx.createOscillator();
+    turboOsc.type = 'sine';
+    turboOsc.frequency.value = 3800;
+    turboGain = ctx.createGain();
+    turboGain.gain.value = 0;
+    turboOsc.connect(turboGain);
+    turboGain.connect(ctx.destination);
+
+    turboOsc.start(); engineOsc.start(); engineOsc2.start();
+
+  } else {
+    // Regular car: smooth sawtooth + soft triangle, classic engine growl
+    engineFilter.frequency.value = 900;
+    engineFilter.Q.value = 1.8;
+
+    engineOsc = ctx.createOscillator();
+    engineOsc.type = 'sawtooth';
+    engineOsc.frequency.value = 120;
+    engineOsc.connect(engineFilter);
+
+    engineOsc2 = ctx.createOscillator();
+    engineOsc2.type = 'triangle';
+    engineOsc2.frequency.value = 242; // near 2x, slight detune for warmth
+    const g2 = ctx.createGain(); g2.gain.value = 0.35;
+    engineOsc2.connect(g2); g2.connect(engineFilter);
+
+    engineOsc.start(); engineOsc2.start();
+  }
 }
 
 function updateEngineSound(throttleOn, speed, maxSpeed) {
-  if (!engineOsc) return;
+  if (!engineOsc || !audioCtx) return;
   const ctx = audioCtx;
   const t = ctx.currentTime;
-  // Idle frequency rises with speed; punch up when throttle pressed
-  const speedRatio = Math.min(speed / (maxSpeed || 1), 1);
-  const baseFreq = 55 + speedRatio * 145 + (throttleOn ? 30 : 0);
-  engineOsc.frequency.setTargetAtTime(baseFreq, t, 0.08);
-  engineOsc2.frequency.setTargetAtTime(baseFreq * 2.02, t, 0.08);
-  // Filter opens with speed for growl
-  engineFilter.frequency.setTargetAtTime(400 + speedRatio * 1200 + (throttleOn ? 400 : 0), t, 0.1);
-  // Volume: quiet idle, louder under throttle
-  const vol = throttleOn ? 0.22 : (speedRatio > 0.05 ? 0.09 : 0.04);
-  engineGain.gain.setTargetAtTime(vol, t, 0.06);
+  const sr = Math.min(speed / (maxSpeed || 1), 1);
+
+  if (engineProfile === 'tractor') {
+    // Tractors have a very narrow RPM range — they don't rev high
+    const freq = 90 + sr * 50 + (throttleOn ? 15 : 0);
+    engineOsc.frequency.setTargetAtTime(freq, t, 0.3);          // sluggish response
+    engineOsc2.frequency.setTargetAtTime(freq * 0.5, t, 0.3);
+    // Chug rate increases slightly under load
+    if (engineLfo) engineLfo.frequency.setTargetAtTime(7 + sr * 8 + (throttleOn ? 3 : 0), t, 0.5);
+    engineFilter.frequency.setTargetAtTime(500 + sr * 600, t, 0.25);
+    const vol = throttleOn ? 0.32 : (sr > 0.05 ? 0.18 : 0.10);
+    engineGain.gain.setTargetAtTime(vol, t, 0.12);
+
+  } else if (engineProfile === 'race') {
+    // Snappy high-rev — frequency and filter shoot up fast
+    const freq = 150 + sr * 330 + (throttleOn ? 60 : 0);
+    engineOsc.frequency.setTargetAtTime(freq, t, 0.03);
+    engineOsc2.frequency.setTargetAtTime(freq * 2.02, t, 0.03);
+    // Resonant filter sweeps wide open for screaming top-end
+    engineFilter.frequency.setTargetAtTime(1200 + sr * 6000 + (throttleOn ? 1000 : 0), t, 0.04);
+    const vol = throttleOn ? 0.26 : (sr > 0.05 ? 0.11 : 0.05);
+    engineGain.gain.setTargetAtTime(vol, t, 0.04);
+    // Turbo whine — rises in pitch and volume as car speeds up, spools slowly
+    if (turboOsc && turboGain) {
+      const turboFreq = 3800 + sr * 5500 + (throttleOn ? 1200 : 0);
+      turboOsc.frequency.setTargetAtTime(turboFreq, t, 0.5);  // turbo lag
+      const turboVol = sr > 0.2 ? (sr - 0.2) / 0.8 * 0.18 : 0;
+      turboGain.gain.setTargetAtTime(turboVol, t, 0.45);
+    }
+
+  } else {
+    // Regular car: responsive, smooth rev
+    const freq = 120 + sr * 180 + (throttleOn ? 35 : 0);
+    engineOsc.frequency.setTargetAtTime(freq, t, 0.07);
+    engineOsc2.frequency.setTargetAtTime(freq * 2.02, t, 0.07);
+    engineFilter.frequency.setTargetAtTime(900 + sr * 3500 + (throttleOn ? 500 : 0), t, 0.09);
+    const vol = throttleOn ? 0.23 : (sr > 0.05 ? 0.10 : 0.05);
+    engineGain.gain.setTargetAtTime(vol, t, 0.06);
+  }
 }
 
 function stopEngineSound() {
   try {
-    if (engineOsc)  { engineOsc.stop();  engineOsc.disconnect(); }
-    if (engineOsc2) { engineOsc2.stop(); engineOsc2.disconnect(); }
-    if (engineFilter) engineFilter.disconnect();
-    if (engineGain)   engineGain.disconnect();
+    if (engineOsc)     { engineOsc.stop();  engineOsc.disconnect(); }
+    if (engineOsc2)    { engineOsc2.stop(); engineOsc2.disconnect(); }
+    if (engineLfo)     { engineLfo.stop();  engineLfo.disconnect(); }
+    if (engineLfoGain) engineLfoGain.disconnect();
+    if (engineOscGain) engineOscGain.disconnect();
+    if (engineFilter)  engineFilter.disconnect();
+    if (engineGain)    engineGain.disconnect();
+    if (turboOsc)      { turboOsc.stop(); turboOsc.disconnect(); }
+    if (turboGain)     turboGain.disconnect();
   } catch(e) {}
-  engineOsc = engineOsc2 = engineFilter = engineGain = null;
+  engineOsc = engineOsc2 = engineFilter = engineGain = engineOscGain = null;
+  engineLfo = engineLfoGain = turboOsc = turboGain = null;
+}
+
+// Schedule a beep at a specific AudioContext time (safe from any call site)
+function scheduleBeep(ctx, when, freq, duration, vol=0.4, type='sine') {
+  try {
+    const osc = ctx.createOscillator();
+    const g   = ctx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    g.gain.setValueAtTime(vol, when);
+    g.gain.exponentialRampToValueAtTime(0.001, when + duration);
+    osc.connect(g); g.connect(ctx.destination);
+    osc.start(when); osc.stop(when + duration + 0.05);
+  } catch(e) {}
 }
 
 function playBeep(freq, duration, vol=0.4, type='sine') {
   try {
     const ctx = getAudioCtx();
-    const osc = ctx.createOscillator();
-    const g   = ctx.createGain();
-    osc.type = type;
-    osc.frequency.value = freq;
-    g.gain.setValueAtTime(vol, ctx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-    osc.connect(g); g.connect(ctx.destination);
-    osc.start(); osc.stop(ctx.currentTime + duration);
+    scheduleBeep(ctx, ctx.currentTime, freq, duration, vol, type);
   } catch(e) {}
 }
 
 function playCheer(isFirst) {
   try {
     const ctx = getAudioCtx();
+    const now = ctx.currentTime;
     // Crowd noise: filtered white noise burst
     const bufLen = ctx.sampleRate * 2.5;
     const buf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
@@ -791,17 +910,17 @@ function playCheer(isFirst) {
     const bpf = ctx.createBiquadFilter();
     bpf.type = 'bandpass'; bpf.frequency.value = 900; bpf.Q.value = 0.4;
     const cheerGain = ctx.createGain();
-    cheerGain.gain.setValueAtTime(0, ctx.currentTime);
-    cheerGain.gain.linearRampToValueAtTime(isFirst ? 0.55 : 0.28, ctx.currentTime + 0.3);
-    cheerGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 2.5);
+    cheerGain.gain.setValueAtTime(0, now);
+    cheerGain.gain.linearRampToValueAtTime(isFirst ? 0.55 : 0.28, now + 0.3);
+    cheerGain.gain.exponentialRampToValueAtTime(0.001, now + 2.5);
     noise.connect(bpf); bpf.connect(cheerGain); cheerGain.connect(ctx.destination);
-    noise.start();
+    noise.start(now);
 
     if (isFirst) {
-      // Victory fanfare — ascending notes
+      // Victory fanfare — all notes scheduled ahead of time, no setTimeout needed
       const notes = [523, 659, 784, 1047];
-      notes.forEach((f, i) => setTimeout(() => playBeep(f, 0.3, 0.35, 'square'), 200 + i * 180));
-      setTimeout(() => playBeep(1047, 0.7, 0.4, 'square'), 200 + 4 * 180);
+      notes.forEach((f, i) => scheduleBeep(ctx, now + 0.2 + i * 0.18, f, 0.3, 0.35, 'square'));
+      scheduleBeep(ctx, now + 0.2 + 4 * 0.18, 1047, 0.7, 0.4, 'square');
     }
   } catch(e) {}
 }
@@ -1220,6 +1339,10 @@ function buildCarMesh(vehicleId, colorHex, cosmetics=[]) {
   if (cat === 'Tractor') {
     bw=3.2*S; bh=1.8*S; bl=5.5*S; cw=2.8*S; ch=1.2*S; cl=2.0*S; cz=1.2*S;
     wr=1.3*S; ww=0.9*S; fwz=1.5*S; rwz=1.8*S; fwr=0.7*S;
+  } else if (vehicleId === 'superMonster') {
+    // Oversized monster — huge wheels, tall body, aggressive stance
+    bw=5.5*S; bh=2.4*S; bl=8.0*S; cw=4.8*S; ch=1.6*S; cl=3.2*S; cz=0.8*S;
+    wr=1.9*S; ww=1.1*S; fwz=2.8*S; rwz=3.2*S; fwr=1.9*S;
   } else if (cat === 'Truck') {
     bw=4.0*S; bh=1.9*S; bl=7.5*S; cw=3.5*S; ch=1.3*S; cl=2.8*S; cz=1.0*S;
     wr=1.0*S; ww=0.7*S; fwz=2.2*S; rwz=2.6*S; fwr=1.0*S;
@@ -2101,33 +2224,6 @@ function addAsphaltMarkings() {
     scene.add(box);
   }
 
-  // Spectator grandstands — tall concrete walls along outer edge
-  const standMat = new THREE.MeshLambertMaterial({color:0x888888});
-  const seatMat  = new THREE.MeshLambertMaterial({color:0x2244aa});
-  for (let i = 0; i < 12; i++) {
-    const t = (i / 12) * Math.PI * 2;
-    const pt = trackPoint(t);
-    const tang = trackTangent(t);
-    const perp = new THREE.Vector3(-tang.z, 0, tang.x);
-    const side = TRACK_WIDTH * 0.9 + 15;
-    const cx = pt.x + perp.x * side;
-    const cz = pt.z + perp.z * side;
-    const ang = Math.atan2(tang.x, tang.z);
-    // Stand base
-    const base = new THREE.Mesh(new THREE.BoxGeometry(22, 6, 8), standMat);
-    base.position.set(cx, 3, cz);
-    base.rotation.y = ang;
-    base.userData.sceneObj = true;
-    base.castShadow = true;
-    scene.add(base);
-    // Seats (blue panel on top)
-    const seats = new THREE.Mesh(new THREE.BoxGeometry(22, 0.5, 8), seatMat);
-    seats.position.set(cx, 6.3, cz);
-    seats.rotation.y = ang;
-    seats.userData.sceneObj = true;
-    scene.add(seats);
-  }
-
   // Speed bump stripes at crossing — white dashes painted on road at figure-8 center
   const dashMat = new THREE.MeshLambertMaterial({color:0xffff00, transparent:true, opacity:0.7});
   for (let crossT of [0, Math.PI]) {
@@ -2226,7 +2322,6 @@ function startRace() {
 
   // Countdown
   document.getElementById('dnfMsg').classList.remove('active');
-  startEngineSound();
   countdown(() => {
     raceActive = true;
     allCars.forEach(c => { c.lapStart = 0; c.lapProgress = c.trackT; });
@@ -2265,8 +2360,6 @@ function updatePhysics(dt) {
   playerCar.update(dt, inp);
   const playerSpeedMph = Math.abs(playerCar.speed) * 7.5;
   if (playerSpeedMph > playerTopSpeed) playerTopSpeed = playerSpeedMph;
-  updateEngineSound(inp.w, Math.abs(playerCar.speed), playerCar.maxSpeed);
-
   // Speed lines effect
   document.getElementById('speedLines').style.opacity = playerSpeedMph > 70 ? Math.min(1,(playerSpeedMph-70)/40) : '0';
 
@@ -2346,7 +2439,7 @@ function endRace() {
   if (raceFinished) return;
   raceFinished = true;
   raceActive = false;
-  stopEngineSound();
+  // (engine sound removed)
 
   // Build final order: actual finishers (in crossing order) → still racing → DNF
   if (!finishOrder.includes(playerCar) && !playerCar.dnf) finishOrder.push(playerCar);
@@ -2427,6 +2520,19 @@ function countdown(onGo) {
   const el = document.getElementById('countdown');
   const num = document.getElementById('cdNum');
   el.classList.add('active');
+
+  // Schedule all countdown beeps immediately using Web Audio time — no setTimeout audio
+  try {
+    const ctx = getAudioCtx();
+    if (ctx.state === 'suspended') ctx.resume();
+    const t0 = ctx.currentTime + 0.05;
+    scheduleBeep(ctx, t0,        440, 0.25, 0.5, 'sine');  // 3
+    scheduleBeep(ctx, t0 + 0.9,  440, 0.25, 0.5, 'sine');  // 2
+    scheduleBeep(ctx, t0 + 1.8,  440, 0.25, 0.5, 'sine');  // 1
+    scheduleBeep(ctx, t0 + 2.7,  880, 0.5,  0.6, 'square'); // GO!
+  } catch(e) {}
+
+  // Visual-only tick using setTimeout
   let n = 3;
   const tick = () => {
     num.textContent = n;
@@ -2436,7 +2542,6 @@ function countdown(onGo) {
     if (n <= 0) {
       num.textContent = 'GO!';
       num.style.color='#00ff88';
-      playBeep(880, 0.5, 0.5, 'square'); // high GO! beep
       setTimeout(() => {
         el.classList.remove('active');
         num.style.color='#ffcc02';
@@ -2445,7 +2550,6 @@ function countdown(onGo) {
       }, 700);
       return;
     }
-    playBeep(440, 0.25, 0.4, 'sine'); // low beep for 3/2/1
     n--;
     setTimeout(tick, 900);
   };
@@ -2617,7 +2721,7 @@ function resumeRace() {
 }
 
 function restartRace() {
-  stopEngineSound();
+  // (engine sound removed)
   document.getElementById('pauseMenu').style.display = 'none';
   racePaused = false;
   raceActive = false;
@@ -2669,7 +2773,7 @@ function showScreen(id) {
 }
 
 function backToMenu() {
-  stopEngineSound();
+  // (engine sound removed)
   document.getElementById('gc').style.display = 'none';
   document.getElementById('raceHUD').classList.remove('active');
   document.getElementById('minimap').classList.remove('active');
@@ -3119,13 +3223,78 @@ document.addEventListener('keydown', e => {
 });
 document.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 
-function mobileKey(k, down, evt) {
-  keys[k] = down;
-  const btnMap = {a:'mcLeft',d:'mcRight',w:'mcUp',s:'mcDown'};
-  const el = document.getElementById(btnMap[k]);
-  if (el) { if (down) el.classList.add('pressed'); else el.classList.remove('pressed'); }
-  if (evt) evt.preventDefault();
-}
+// Virtual floating joystick — zone is the entire mobileCtrl bar
+(function() {
+  const zone = document.getElementById('mobileCtrl');
+  const base = document.getElementById('joystickBase');
+  const knob = document.getElementById('joystickKnob');
+  if (!zone || !base || !knob) return;
+
+  const RADIUS = 48;  // max knob travel from base center (px)
+  const DEAD   = 0.20;
+  const THR    = 0.35;
+
+  let touchId = null;
+  let originX = 0, originY = 0;
+
+  function applyJoy(nx, ny) {
+    keys['a'] = nx < -THR;
+    keys['d'] = nx >  THR;
+    keys['w'] = ny < -THR;
+    keys['s'] = ny >  THR;
+  }
+
+  function showBase(cx, cy) {
+    base.style.left    = (cx - 65) + 'px';
+    base.style.top     = (cy - 65) + 'px';
+    base.style.display = 'block';
+    knob.style.transform = 'translate(-50%,-50%)';
+  }
+
+  function hideBase() {
+    base.style.display = 'none';
+    keys['w'] = keys['s'] = keys['a'] = keys['d'] = false;
+    touchId = null;
+  }
+
+  zone.addEventListener('touchstart', e => {
+    e.preventDefault();
+    if (touchId !== null) return;
+    const t  = e.changedTouches[0];
+    touchId  = t.identifier;
+    const r  = zone.getBoundingClientRect();
+    originX  = t.clientX - r.left;
+    originY  = t.clientY - r.top;
+    showBase(originX, originY);
+  }, {passive: false});
+
+  zone.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (touchId === null) return;
+    for (const t of e.changedTouches) {
+      if (t.identifier !== touchId) continue;
+      const r  = zone.getBoundingClientRect();
+      const dx = (t.clientX - r.left) - originX;
+      const dy = (t.clientY - r.top)  - originY;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      const c  = Math.min(dist, RADIUS);
+      const kx = (dx / dist) * c;
+      const ky = (dy / dist) * c;
+      knob.style.transform = `translate(calc(-50% + ${kx}px), calc(-50% + ${ky}px))`;
+      const nx = kx / RADIUS, ny = ky / RADIUS;
+      applyJoy(Math.abs(nx) > DEAD ? nx : 0, Math.abs(ny) > DEAD ? ny : 0);
+      break;
+    }
+  }, {passive: false});
+
+  function onEnd(e) {
+    for (const t of e.changedTouches) {
+      if (t.identifier === touchId) { hideBase(); break; }
+    }
+  }
+  zone.addEventListener('touchend',    onEnd, {passive: false});
+  zone.addEventListener('touchcancel', onEnd, {passive: false});
+}());
 
 // ==============================
 // UTILS
