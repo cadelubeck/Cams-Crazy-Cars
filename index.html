@@ -550,7 +550,7 @@ const ARENAS = [
   {id:'water', name:'Water Crossing',   emoji:'🌊', lock:0, tireLock:true, color:0x1a6fa0, fogColor:0x87ceeb, sky:0x87ceeb,
    desc:'Water resistance drags everything down — Max Tires required! 🔵'},
   {id:'mud',     name:'Mud Bog Challenge',  emoji:'🟫', lock:0, mudLock:true, color:0x3d2010, fogColor:0x9e8e7a, sky:0xb0a085,
-   desc:'Deep mud — tractors with big tires only! 🚜'},
+   desc:'Deep mud — tractors or monster trucks with big tires only! 🚜🔥'},
   {id:'asphalt', name:'Asphalt Speedway',   emoji:'🏎️', lock:6, color:0x1a1a1a, fogColor:0xb0c8e0, sky:0xb0c8e0,
    desc:'Smooth fast tarmac — race cars dominate! Top speed rules here.'},
 ];
@@ -560,12 +560,18 @@ function getSurfaceModifiers(arenaIdx, vehicleId) {
   if (arenaIdx === 0) return {handling:1.0, accel:0.62, maxSpd:0.78, drag:0.83}; // grass: soft & heavy
   if (arenaIdx === 1) return {handling:1.0, accel:0.58, maxSpd:0.72, drag:0.84}; // sand: slow & heavy
   if (arenaIdx === 2) return {handling:1.0, accel:0.72, maxSpd:0.82, drag:0.85}; // water: resistance
-  if (arenaIdx === 3) { // mud: tractors scale with tire level, others struggle badly
-    const isTractor = vehicleId && VEHICLES[vehicleId] && VEHICLES[vehicleId].cat === 'Tractor';
+  if (arenaIdx === 3) { // mud: tractors/monster trucks scale with tire level
+    const vd3 = vehicleId && VEHICLES[vehicleId];
+    const isTractor = vd3 && vd3.cat === 'Tractor';
+    const isMonster = vehicleId === 'monster' || vehicleId === 'superMonster';
     const tireLevel = (vehicleId && G.vehicleUpgrades[vehicleId]) ? (G.vehicleUpgrades[vehicleId].wheels || 0) : 0;
     if (isTractor) {
       const b = tireLevel / 10;
       return {handling: 0.75 + b*0.25, accel: 0.48 + b*0.47, maxSpd: 0.58 + b*0.37, drag: 0.79 + b*0.07};
+    }
+    if (isMonster) {
+      const b = tireLevel / 10;
+      return {handling: 0.65 + b*0.2, accel: 0.42 + b*0.38, maxSpd: 0.50 + b*0.32, drag: 0.76 + b*0.06};
     }
     return {handling:0.55, accel:0.20, maxSpd:0.35, drag:0.70};
   }
@@ -602,6 +608,9 @@ const COSMETICS = [
   {id:'spoiler',    name:'Spoiler',         cost:12, emoji:'🏎️'},
   {id:'mudflaps',   name:'Mud Flaps',       cost:8,  emoji:'💧'},
   {id:'horn',       name:'Air Horn',        cost:6,  emoji:'📢'},
+  {id:'stripes',    name:'Racing Stripes',  cost:18, emoji:'〰️'},
+  {id:'plate',      name:'License Plate',   cost:10, emoji:'🪪'},
+  {id:'stickers',   name:'Stickers',        cost:14, emoji:'⭐'},
 ];
 
 const LEADERBOARD_DATA = [
@@ -1527,6 +1536,54 @@ function buildCarMesh(vehicleId, colorHex, cosmetics=[]) {
       bell.position.set(bw*0.27 + 0.62, bodyTop + 0.32, frontZ*0.38);
       g.add(bell);
     }
+    if (cosmetics.includes('stripes')) {
+      // Two parallel racing stripes running hood-to-roof down the car center
+      const hsl = {h:0, s:0, l:0}; col.getHSL(hsl);
+      const stripeCol = new THREE.Color().setHSL((hsl.h + 0.5) % 1, 1, 0.55);
+      const stripeMat = new THREE.MeshLambertMaterial({color: stripeCol});
+      const gap = bw * 0.12;
+      [-gap, gap].forEach(sx => {
+        const stripe = new THREE.Mesh(new THREE.BoxGeometry(bw*0.13, 0.06, bl*0.9), stripeMat);
+        stripe.position.set(sx, bodyTop + bh + 0.04, 0);
+        g.add(stripe);
+      });
+    }
+    if (cosmetics.includes('plate')) {
+      // License plate on rear with player name via canvas texture
+      const canvas = document.createElement('canvas');
+      canvas.width = 128; canvas.height = 48;
+      const ctx2d = canvas.getContext('2d');
+      ctx2d.fillStyle = '#f5e642';
+      ctx2d.fillRect(0, 0, 128, 48);
+      ctx2d.strokeStyle = '#333'; ctx2d.lineWidth = 3;
+      ctx2d.strokeRect(2, 2, 124, 44);
+      ctx2d.fillStyle = '#111';
+      ctx2d.font = 'bold 22px Arial';
+      ctx2d.textAlign = 'center';
+      ctx2d.textBaseline = 'middle';
+      const plateName = (G && G.playerName ? G.playerName : 'CAM').toUpperCase().slice(0, 8);
+      ctx2d.fillText(plateName, 64, 24);
+      const tex = new THREE.CanvasTexture(canvas);
+      const plateMat = new THREE.MeshLambertMaterial({map: tex});
+      const plate = new THREE.Mesh(new THREE.PlaneGeometry(bw*0.5, bh*0.3), plateMat);
+      plate.position.set(0, bodyTop + bh*0.45, rearZ + 0.06);
+      g.add(plate);
+    }
+    if (cosmetics.includes('stickers')) {
+      // Colorful sponsor stickers on both sides of the body
+      const stickerColors = [0xff2200, 0xffcc00, 0x00aaff, 0x00cc44, 0xff6600];
+      [-bw/2 - 0.05, bw/2 + 0.05].forEach((sx, side) => {
+        const rotY = side === 0 ? Math.PI/2 : -Math.PI/2;
+        stickerColors.forEach((sc, i) => {
+          const sm = new THREE.MeshLambertMaterial({color: sc});
+          const sw = bh*0.28, sh = bh*0.28;
+          const stk = new THREE.Mesh(new THREE.PlaneGeometry(sw, sh), sm);
+          stk.rotation.y = rotY;
+          stk.position.set(sx, bodyTop + bh*0.45, frontZ*0.55 + i * (bl * 0.18));
+          g.add(stk);
+        });
+      });
+    }
   }
 
   g.castShadow = true;
@@ -2261,10 +2318,11 @@ function startRace() {
     return;
   }
   if (arena.mudLock) {
-    const isTractor = VEHICLES[G.currentVehicle] && VEHICLES[G.currentVehicle].cat === 'Tractor';
-    if (!isTractor) { notify('Mud Bog is tractor-only! 🚜', 'bad'); return; }
+    const vd = VEHICLES[G.currentVehicle];
+    const isMudOk = vd && (vd.cat === 'Tractor' || vd.cat === 'Truck' && (G.currentVehicle === 'monster' || G.currentVehicle === 'superMonster'));
+    if (!isMudOk) { notify('Mud Bog: Tractors or Monster Trucks only! 🚜', 'bad'); return; }
     if (getVehicleUpgrades(G.currentVehicle).wheels < 5) {
-      notify('Mud Bog requires Tires level 5+! 🚜', 'bad'); return;
+      notify('Mud Bog requires Tires level 5+!', 'bad'); return;
     }
   }
 
@@ -2861,12 +2919,13 @@ function buildArenaCards() {
     const levelLocked = G.level < ar.lock;
     const tireLevel = G.initialized ? getVehicleUpgrades(G.currentVehicle).wheels : 0;
     const tireLocked = ar.tireLock && tireLevel < 10;
-    const isTractor = G.initialized && VEHICLES[G.currentVehicle] && VEHICLES[G.currentVehicle].cat === 'Tractor';
-    const mudLocked = ar.mudLock && (!isTractor || tireLevel < 5);
+    const vdCur = G.initialized && VEHICLES[G.currentVehicle];
+    const isMudOk = vdCur && (vdCur.cat === 'Tractor' || (G.currentVehicle === 'monster' || G.currentVehicle === 'superMonster'));
+    const mudLocked = ar.mudLock && (!isMudOk || tireLevel < 5);
     const locked = levelLocked || tireLocked || mudLocked;
     const lockMsg = levelLocked ? `🔒 Level ${ar.lock}`
       : tireLocked ? `🔵 Max Tires Required (${tireLevel}/10)`
-      : mudLocked ? `🚜 Tractor + Tires Lvl 5 Required${isTractor ? ' (' + tireLevel + '/5)' : ' (need tractor)'}`
+      : mudLocked ? `🚜🔥 Tractor or Monster Truck + Tires Lvl 5${isMudOk ? ` (${tireLevel}/5)` : ''}`
       : '';
     const card = document.createElement('div');
     card.className = 'arena-card' + (idx===0?' sel':'') + (locked?' locked':'');
