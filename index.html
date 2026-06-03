@@ -599,8 +599,8 @@ function getSurfaceModifiers(arenaIdx, vehicleId) {
     const isCar = vehicleId && VEHICLES[vehicleId] && VEHICLES[vehicleId].cat === 'Car';
     const engLevel = (vehicleId && G.vehicleUpgrades[vehicleId]) ? (G.vehicleUpgrades[vehicleId].engine || 0) : 0;
     const speedBonus = (isCar || isMoto) ? 1.0 + engLevel * 0.04 : 1.0;
-    if (isMoto) return {handling: 1.45, accel: 1.5 * speedBonus, maxSpd: 1.55 * speedBonus, drag: 0.95};
-    return {handling: isCar ? 1.35 : 1.0, accel: isCar ? 1.4 * speedBonus : 1.05, maxSpd: isCar ? 1.45 * speedBonus : 1.08, drag: 0.93};
+    if (isMoto) return {handling: 1.30, accel: 1.25 * speedBonus, maxSpd: 1.30 * speedBonus, drag: 0.93};
+    return {handling: isCar ? 1.20 : 1.0, accel: isCar ? 1.18 * speedBonus : 1.02, maxSpd: isCar ? 1.22 * speedBonus : 1.04, drag: 0.93};
   }
   if (arenaIdx === 5) return isMoto
     ? {handling:1.10, accel:0.80, maxSpd:0.88, drag:0.88} // moto on packed dirt: decent but not great
