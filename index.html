@@ -2924,8 +2924,9 @@ function updateCamera(dt) {
   const h = playerCar.heading;
   const spd = Math.abs(playerCar.speed);
 
-  const camDist = 28 + spd * 0.5;
-  const camHeight = 12 + spd * 0.2;
+  const mobileZoom = isMobileCtrl ? 1.45 : 1.0;
+  const camDist = (28 + spd * 0.5) * mobileZoom;
+  const camHeight = (12 + spd * 0.2) * mobileZoom;
 
   const tcx = px - Math.sin(h) * camDist;
   const tcy = camHeight;
