@@ -251,8 +251,13 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 #mobileCtrl{position:fixed;bottom:0;left:0;right:0;height:210px;display:none;z-index:200;touch-action:none}
 @media(hover:none){#mobileCtrl.active{display:block}}
 @media(hover:none){.hud-bl{bottom:220px}.hud-br{display:none}}
-#joystickBase{position:absolute;width:130px;height:130px;border-radius:50%;background:rgba(0,0,0,.40);border:2px solid rgba(255,255,255,.22);display:none;pointer-events:none}
-#joystickKnob{position:absolute;width:56px;height:56px;border-radius:50%;background:rgba(255,107,53,.85);border:2px solid rgba(255,255,255,.55);box-shadow:0 0 16px rgba(255,107,53,.6);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none}
+#dpad{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);width:210px;height:210px}
+.dpad-btn{position:absolute;width:82px;height:82px;background:rgba(0,0,0,.52);border:3px solid rgba(255,255,255,.38);border-radius:16px;color:#fff;font-size:34px;display:flex;align-items:center;justify-content:center;user-select:none;-webkit-user-select:none;touch-action:none;cursor:pointer}
+.dpad-btn:active{background:rgba(255,107,53,.55);border-color:rgba(255,107,53,.9)}
+.dpad-up{top:0;left:50%;transform:translateX(-50%)}
+.dpad-left{left:0;top:50%;transform:translateY(-50%)}
+.dpad-down{bottom:0;left:50%;transform:translateX(-50%)}
+.dpad-right{right:0;top:50%;transform:translateY(-50%)}
 /* Settings */
 #settingsScreen{background:linear-gradient(135deg,#0f0c29,#1a1a3e);padding-top:75px;overflow:hidden;align-items:stretch;justify-content:flex-start}
 .set-section{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:20px;margin-bottom:18px}
@@ -517,7 +522,12 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 
 <!-- Mobile controls -->
 <div id="mobileCtrl">
-  <div id="joystickBase"><div id="joystickKnob"></div></div>
+  <div id="dpad">
+    <div id="btnUp"    class="dpad-btn dpad-up">▲</div>
+    <div id="btnLeft"  class="dpad-btn dpad-left">◀</div>
+    <div id="btnDown"  class="dpad-btn dpad-down">▼</div>
+    <div id="btnRight" class="dpad-btn dpad-right">▶</div>
+  </div>
 </div>
 
 <!-- Notification -->
@@ -959,6 +969,7 @@ let playerTopSpeed = 0;
 let countdownActive = false;
 
 const keys = {};
+const isMobileCtrl = window.matchMedia('(hover:none)').matches;
 let animFrameId = null;
 
 // Figure-8 track parameters
@@ -1105,7 +1116,8 @@ class CarEntity {
 
     // Steering
     const turnF = Math.min(1, Math.abs(this.speed) / 4) * Math.sign(this.speed);
-    const effHandling = this.handling * sm.handling;
+    const mobileF = (this.isPlayer && isMobileCtrl) ? 0.80 : 1.0;
+    const effHandling = this.handling * sm.handling * mobileF;
     if (input.a) this.heading += effHandling * turnF * dt * 60;
     if (input.d) this.heading -= effHandling * turnF * dt * 60;
 
@@ -3633,77 +3645,16 @@ document.addEventListener('keydown', e => {
 });
 document.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 
-// Virtual floating joystick — zone is the entire mobileCtrl bar
+// D-pad mobile controls
 (function() {
-  const zone = document.getElementById('mobileCtrl');
-  const base = document.getElementById('joystickBase');
-  const knob = document.getElementById('joystickKnob');
-  if (!zone || !base || !knob) return;
-
-  const RADIUS = 48;  // max knob travel from base center (px)
-  const DEAD   = 0.20;
-  const THR    = 0.35;
-
-  let touchId = null;
-  let originX = 0, originY = 0;
-
-  function applyJoy(nx, ny) {
-    keys['a'] = nx < -THR;
-    keys['d'] = nx >  THR;
-    keys['w'] = ny < -THR;
-    keys['s'] = ny >  THR;
-  }
-
-  function showBase(cx, cy) {
-    base.style.left    = (cx - 65) + 'px';
-    base.style.top     = (cy - 65) + 'px';
-    base.style.display = 'block';
-    knob.style.transform = 'translate(-50%,-50%)';
-  }
-
-  function hideBase() {
-    base.style.display = 'none';
-    keys['w'] = keys['s'] = keys['a'] = keys['d'] = false;
-    touchId = null;
-  }
-
-  zone.addEventListener('touchstart', e => {
-    e.preventDefault();
-    if (touchId !== null) return;
-    const t  = e.changedTouches[0];
-    touchId  = t.identifier;
-    const r  = zone.getBoundingClientRect();
-    originX  = t.clientX - r.left;
-    originY  = t.clientY - r.top;
-    showBase(originX, originY);
-  }, {passive: false});
-
-  zone.addEventListener('touchmove', e => {
-    e.preventDefault();
-    if (touchId === null) return;
-    for (const t of e.changedTouches) {
-      if (t.identifier !== touchId) continue;
-      const r  = zone.getBoundingClientRect();
-      const dx = (t.clientX - r.left) - originX;
-      const dy = (t.clientY - r.top)  - originY;
-      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      const c  = Math.min(dist, RADIUS);
-      const kx = (dx / dist) * c;
-      const ky = (dy / dist) * c;
-      knob.style.transform = `translate(calc(-50% + ${kx}px), calc(-50% + ${ky}px))`;
-      const nx = kx / RADIUS, ny = ky / RADIUS;
-      applyJoy(Math.abs(nx) > DEAD ? nx : 0, Math.abs(ny) > DEAD ? ny : 0);
-      break;
-    }
-  }, {passive: false});
-
-  function onEnd(e) {
-    for (const t of e.changedTouches) {
-      if (t.identifier === touchId) { hideBase(); break; }
-    }
-  }
-  zone.addEventListener('touchend',    onEnd, {passive: false});
-  zone.addEventListener('touchcancel', onEnd, {passive: false});
+  const map = {btnUp:'w', btnDown:'s', btnLeft:'a', btnRight:'d'};
+  Object.entries(map).forEach(([id, k]) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.addEventListener('touchstart',  e => { e.preventDefault(); keys[k] = true;  }, {passive:false});
+    btn.addEventListener('touchend',    e => { e.preventDefault(); keys[k] = false; }, {passive:false});
+    btn.addEventListener('touchcancel', e => { e.preventDefault(); keys[k] = false; }, {passive:false});
+  });
 }());
 
 // ==============================
