@@ -553,6 +553,8 @@ const ARENAS = [
    desc:'Deep mud — tractors or monster trucks with big tires only! 🚜🔥'},
   {id:'asphalt', name:'Asphalt Speedway',   emoji:'🏎️', lock:6, color:0x1a1a1a, fogColor:0xb0c8e0, sky:0xb0c8e0,
    desc:'Smooth fast tarmac — race cars dominate! Top speed rules here.'},
+  {id:'practice', name:'Open Practice',     emoji:'🟤', lock:0, color:0x8B7355, fogColor:0x9e8e7a, sky:0xb8c8e0,
+   desc:'Huge open arena — drive free! Jumps, rocks and trees everywhere.'},
 ];
 
 // Returns physics multipliers for the current race surface
@@ -581,6 +583,7 @@ function getSurfaceModifiers(arenaIdx, vehicleId) {
     const speedBonus = isCar ? 1.0 + engLevel * 0.04 : 1.0; // cars get up to +40% with max engine
     return {handling: isCar ? 1.35 : 1.0, accel: isCar ? 1.4 * speedBonus : 1.05, maxSpd: isCar ? 1.45 * speedBonus : 1.08, drag: 0.93};
   }
+  if (arenaIdx === 5) return {handling:1.05, accel:0.90, maxSpd:0.95, drag:0.90}; // practice: packed dirt
   return {handling:1.0, accel:1.0, maxSpd:1.0, drag:0.88};
 }
 
@@ -951,6 +954,8 @@ let animFrameId = null;
 const TRACK_R = 280;
 const TRACK_WIDTH = 72;
 const TRACK_SAMPLES = [];
+const PRACTICE_R = 400;       // Open Practice arena outer wall radius
+const PRACTICE_CIRCUIT_R = 240; // AI lap path radius inside practice arena
 
 // Precompute track samples
 (function() {
@@ -1015,8 +1020,14 @@ class CarEntity {
     this.hp       = this.maxHp;
 
     // Track state
-    const sp = trackPoint(startT);
-    const st = trackTangent(startT);
+    let sp, st;
+    if (G.raceConfig.arena === 5) {
+      sp = {x: Math.cos(startT) * PRACTICE_CIRCUIT_R, z: Math.sin(startT) * PRACTICE_CIRCUIT_R};
+      st = {x: -Math.sin(startT), z: Math.cos(startT)};
+    } else {
+      sp = trackPoint(startT);
+      st = trackTangent(startT);
+    }
     const off = laneOff;
     this.x = sp.x - st.z * off;
     this.z = sp.z + st.x * off;
@@ -1093,27 +1104,51 @@ class CarEntity {
     this.x += Math.sin(this.heading) * this.speed * mdt * 0.13;
     this.z += Math.cos(this.heading) * this.speed * mdt * 0.13;
 
-    // Off-track penalty
-    const {t, dist} = nearestTrackT(this.x, this.z, this.trackT);
-    const prevT = this.trackT;
-    this.trackT = t;
-
-    if (dist > TRACK_WIDTH / 2 + 5) {
-      this.speed *= Math.pow(0.7, dt * 60);
-      // Wall/barrier hit damage
-      if (dist > TRACK_WIDTH / 2 + 8 && Math.abs(this.speed) > 2 && this.damageCooldown <= 0) {
-        this.takeDamage(1);
-        if (this.isPlayer) notify('Barrier hit! 💥', 'bad');
+    // Boundary + lap tracking
+    let delta;
+    if (G.raceConfig.arena === 5) {
+      // Open Practice: circular boundary check
+      const pr = Math.sqrt(this.x * this.x + this.z * this.z);
+      if (pr > PRACTICE_R - 15) {
+        this.speed *= Math.pow(0.75, dt * 60);
+        if (pr > PRACTICE_R - 8 && Math.abs(this.speed) > 2 && this.damageCooldown <= 0) {
+          this.takeDamage(1);
+          if (this.isPlayer) notify('Wall hit! 💥', 'bad');
+        }
+        if (pr > PRACTICE_R - 2 && this.isPlayer) {
+          const wallAng = Math.atan2(this.z, this.x);
+          this.x = Math.cos(wallAng) * (PRACTICE_R - 4);
+          this.z = Math.sin(wallAng) * (PRACTICE_R - 4);
+          this.speed *= 0.3;
+          notify('Bounce!', 'bad');
+          G.stats.rollovers++;
+        }
       }
-      if (dist > TRACK_WIDTH / 2 + 30 && this.isPlayer) {
-        // Auto reset
-        const snap = trackPoint(t);
-        this.x = snap.x;
-        this.z = snap.z;
-        this.speed *= 0.3;
-        notify('Back on track!', 'bad');
-        G.stats.rollovers++;
+      const prevT = this.trackT;
+      const angle = Math.atan2(this.z, this.x);
+      this.trackT = angle;
+      delta = angle - prevT;
+    } else {
+      // Normal lemniscate track
+      const {t, dist} = nearestTrackT(this.x, this.z, this.trackT);
+      const prevT = this.trackT;
+      this.trackT = t;
+      if (dist > TRACK_WIDTH / 2 + 5) {
+        this.speed *= Math.pow(0.7, dt * 60);
+        if (dist > TRACK_WIDTH / 2 + 8 && Math.abs(this.speed) > 2 && this.damageCooldown <= 0) {
+          this.takeDamage(1);
+          if (this.isPlayer) notify('Barrier hit! 💥', 'bad');
+        }
+        if (dist > TRACK_WIDTH / 2 + 30 && this.isPlayer) {
+          const snap = trackPoint(t);
+          this.x = snap.x;
+          this.z = snap.z;
+          this.speed *= 0.3;
+          notify('Back on track!', 'bad');
+          G.stats.rollovers++;
+        }
       }
+      delta = t - prevT;
     }
 
     // Tree / rock obstacle collision
@@ -1137,7 +1172,6 @@ class CarEntity {
     }
 
     // Lap progress (continuous angle tracking)
-    let delta = t - prevT;
     if (delta < -Math.PI) delta += Math.PI * 2;
     if (delta > Math.PI) delta -= Math.PI * 2;
     this.lapProgress += delta;
@@ -1195,8 +1229,14 @@ class CarEntity {
     if (this.dnf || this.finished || countdownActive) return;
 
     // Target a lookahead point on the track
-    const lookaheadT = this.trackT + this.aiLookahead + this.aiNoise;
-    const target = trackPoint(lookaheadT);
+    let target;
+    if (G.raceConfig.arena === 5) {
+      const lookaheadAngle = this.trackT + this.aiLookahead * 1.5 + this.aiNoise;
+      target = {x: Math.cos(lookaheadAngle) * PRACTICE_CIRCUIT_R, z: Math.sin(lookaheadAngle) * PRACTICE_CIRCUIT_R};
+    } else {
+      const lookaheadT = this.trackT + this.aiLookahead + this.aiNoise;
+      target = trackPoint(lookaheadT);
+    }
 
     // Direction to target
     const tx = target.x - this.x;
@@ -1220,14 +1260,29 @@ class CarEntity {
     this.x += Math.sin(this.heading) * this.speed * mdt * 0.13;
     this.z += Math.cos(this.heading) * this.speed * mdt * 0.13;
 
-    // Track progress
-    const {t, dist} = nearestTrackT(this.x, this.z, this.trackT);
-    const prevT = this.trackT;
-    this.trackT = t;
-
-    // Wall damage for AI
-    if (dist > TRACK_WIDTH / 2 + 8 && this.speed > 2 && this.damageCooldown <= 0) {
-      this.takeDamage(1);
+    // Track progress + boundary
+    let delta;
+    if (G.raceConfig.arena === 5) {
+      const pr = Math.sqrt(this.x * this.x + this.z * this.z);
+      if (pr > PRACTICE_R - 10 && this.speed > 2 && this.damageCooldown <= 0) {
+        this.takeDamage(1);
+        const wallAng = Math.atan2(this.z, this.x);
+        this.x = Math.cos(wallAng) * (PRACTICE_R - 6);
+        this.z = Math.sin(wallAng) * (PRACTICE_R - 6);
+        this.speed *= 0.3;
+      }
+      const prevT = this.trackT;
+      const angle = Math.atan2(this.z, this.x);
+      this.trackT = angle;
+      delta = angle - prevT;
+    } else {
+      const {t, dist} = nearestTrackT(this.x, this.z, this.trackT);
+      const prevT = this.trackT;
+      this.trackT = t;
+      if (dist > TRACK_WIDTH / 2 + 8 && this.speed > 2 && this.damageCooldown <= 0) {
+        this.takeDamage(1);
+      }
+      delta = t - prevT;
     }
 
     // Tree / rock obstacle collision for AI
@@ -1246,7 +1301,6 @@ class CarEntity {
       }
     }
 
-    let delta = t - prevT;
     if (delta < -Math.PI) delta += Math.PI * 2;
     if (delta > Math.PI) delta -= Math.PI * 2;
     this.lapProgress += delta;
@@ -1289,10 +1343,17 @@ class CarEntity {
     if (this.speed < 0.5) {
       this.stuckTimer += dt;
       if (this.stuckTimer > 2.5) {
-        const tang = trackTangent(this.trackT);
-        const snap = trackPoint(this.trackT);
-        this.x = snap.x; this.z = snap.z;
-        this.heading = Math.atan2(tang.x, tang.z);
+        if (G.raceConfig.arena === 5) {
+          const tang = {x: -Math.sin(this.trackT), z: Math.cos(this.trackT)};
+          this.x = Math.cos(this.trackT) * PRACTICE_CIRCUIT_R;
+          this.z = Math.sin(this.trackT) * PRACTICE_CIRCUIT_R;
+          this.heading = Math.atan2(tang.x, tang.z);
+        } else {
+          const tang = trackTangent(this.trackT);
+          const snap = trackPoint(this.trackT);
+          this.x = snap.x; this.z = snap.z;
+          this.heading = Math.atan2(tang.x, tang.z);
+        }
         this.speed = this.maxSpeed * 0.4;
         this.stuckTimer = 0;
       }
@@ -1666,6 +1727,11 @@ function buildScene(arenaIdx) {
   ground.userData.sceneObj = true;
   scene.add(ground);
 
+  if (arenaIdx === 5) {
+    buildPracticeArena();
+    return;
+  }
+
   // Road + boundaries
   buildRoad(arenaIdx);
   addCurbsAndBarriers(arenaIdx);
@@ -1684,6 +1750,144 @@ function buildScene(arenaIdx) {
   if (arenaIdx === 2) addWaterPuddles();
   if (arenaIdx === 3) addMudPits();
   if (arenaIdx === 4) addAsphaltMarkings();
+}
+
+function buildPracticeArena() {
+  const rng = mulberry32(77777);
+  const PRAD = PRACTICE_R;
+
+  // Large dirt disc ground
+  const discGeo = new THREE.CircleGeometry(PRAD + 30, 72);
+  const discMat = new THREE.MeshLambertMaterial({color:0x8B7355});
+  const disc = new THREE.Mesh(discGeo, discMat);
+  disc.rotation.x = -Math.PI / 2;
+  disc.receiveShadow = true;
+  disc.userData.sceneObj = true;
+  scene.add(disc);
+
+  // Outer wall — thick cylinder ring visible from inside (BackSide) and outside (FrontSide)
+  const wallH = 14;
+  const wallInner = new THREE.Mesh(
+    new THREE.CylinderGeometry(PRAD, PRAD, wallH, 72, 1, true),
+    new THREE.MeshLambertMaterial({color:0x5d4037, side:THREE.BackSide})
+  );
+  wallInner.position.y = wallH / 2;
+  wallInner.userData.sceneObj = true;
+  scene.add(wallInner);
+  const wallOuter = new THREE.Mesh(
+    new THREE.CylinderGeometry(PRAD + 3, PRAD + 3, wallH + 2, 72, 1, true),
+    new THREE.MeshLambertMaterial({color:0x8B4513})
+  );
+  wallOuter.position.y = (wallH + 2) / 2;
+  wallOuter.userData.sceneObj = true;
+  scene.add(wallOuter);
+  // Wall cap top
+  const capGeo = new THREE.RingGeometry(PRAD, PRAD + 3, 72);
+  const capMat = new THREE.MeshLambertMaterial({color:0x6d3a1a});
+  const cap = new THREE.Mesh(capGeo, capMat);
+  cap.rotation.x = -Math.PI / 2;
+  cap.position.y = wallH + 1;
+  cap.userData.sceneObj = true;
+  scene.add(cap);
+
+  // Start/finish stripe
+  const stripeMat = new THREE.MeshLambertMaterial({color:0xffffff});
+  const stripe = new THREE.Mesh(new THREE.PlaneGeometry(PRACTICE_CIRCUIT_R * 0.6, 3), stripeMat);
+  stripe.rotation.x = -Math.PI / 2;
+  stripe.position.set(PRACTICE_CIRCUIT_R * 0.7, 0.05, 0);
+  stripe.userData.sceneObj = true;
+  scene.add(stripe);
+  // Checkered finish posts
+  for (let s = -1; s <= 1; s += 2) {
+    const post = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.6, 0.6, 10, 8),
+      new THREE.MeshLambertMaterial({color:0xf0f0f0})
+    );
+    post.position.set(PRACTICE_CIRCUIT_R * 0.7, 5, s * 18);
+    post.userData.sceneObj = true;
+    scene.add(post);
+  }
+
+  // Jump hills scattered inside — ramps you can catch air on
+  const rampMat = new THREE.MeshLambertMaterial({color:0xc8960c});
+  for (let i = 0; i < 8; i++) {
+    const angle = (i / 8) * Math.PI * 2 + rng() * 0.4;
+    const rad = 90 + rng() * 240;
+    const x = Math.cos(angle) * rad;
+    const z = Math.sin(angle) * rad;
+    const hillH = 5 + rng() * 5;
+    const hillD = 20 + rng() * 14;
+    const hillW = 28 + rng() * 22;
+    const hill = new THREE.Mesh(new THREE.BoxGeometry(hillW, hillH, hillD), rampMat);
+    hill.position.set(x, hillH * 0.4, z);
+    hill.rotation.y = angle + Math.PI / 2;
+    hill.rotation.x = -0.20;
+    hill.userData.sceneObj = true;
+    hill.castShadow = true;
+    scene.add(hill);
+    jumpZones.push({x, z, r: hillD * 0.7, boost: 18 + hillH * 1.5});
+  }
+
+  // Rocks — some decorative, some collidable
+  const rockMat = new THREE.MeshLambertMaterial({color:0x4a3020});
+  const bigRockMat = new THREE.MeshLambertMaterial({color:0x5a4030});
+  // Decorative background rocks
+  for (let i = 0; i < 25; i++) {
+    const angle = rng() * Math.PI * 2;
+    const rad = 30 + rng() * 340;
+    const x = Math.cos(angle) * rad;
+    const z = Math.sin(angle) * rad;
+    const r = 1 + rng() * 3;
+    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 0), rockMat);
+    rock.position.set(x, r * 0.4, z);
+    rock.rotation.set(rng() * Math.PI, rng() * Math.PI, rng() * Math.PI);
+    rock.userData.sceneObj = true;
+    rock.castShadow = true;
+    scene.add(rock);
+  }
+  // Obstacle rocks spread around arena
+  for (let i = 0; i < 12; i++) {
+    const angle = (i / 12) * Math.PI * 2 + rng() * 0.5;
+    const rad = 60 + rng() * 290;
+    const x = Math.cos(angle) * rad;
+    const z = Math.sin(angle) * rad;
+    const r = 2.5 + rng() * 3;
+    const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 0), bigRockMat);
+    rock.position.set(x, r * 0.5, z);
+    rock.rotation.set(rng() * Math.PI, rng() * Math.PI, rng() * Math.PI);
+    rock.userData.sceneObj = true;
+    rock.castShadow = true;
+    scene.add(rock);
+    treeObstacles.push({x, z, r: r + 1.8, label:'rock'});
+  }
+
+  // Trees scattered inside
+  const trunkMat = new THREE.MeshLambertMaterial({color:0x5d4037});
+  const leafMat  = new THREE.MeshLambertMaterial({color:0x2d7a3a});
+  for (let i = 0; i < 14; i++) {
+    const angle = (i / 14) * Math.PI * 2 + rng() * 0.6;
+    const rad = 70 + rng() * 280;
+    const x = Math.cos(angle) * rad;
+    const z = Math.sin(angle) * rad;
+    const h = 9 + rng() * 10;
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.2, h, 8), trunkMat);
+    trunk.position.set(x, h * 0.5, z);
+    trunk.userData.sceneObj = true;
+    trunk.castShadow = true;
+    scene.add(trunk);
+    const lh = 5 + rng() * 5;
+    const leaf = new THREE.Mesh(new THREE.SphereGeometry(4 + rng() * 3, 8, 6), leafMat);
+    leaf.position.set(x, h + lh * 0.45, z);
+    leaf.userData.sceneObj = true;
+    scene.add(leaf);
+    treeObstacles.push({x, z, r: 5 + rng() * 2, label:'tree'});
+  }
+
+  // Lighting (arena-specific fill light for open feel)
+  const fillLight = new THREE.DirectionalLight(0xfff8e0, 0.4);
+  fillLight.position.set(-200, 300, 200);
+  fillLight.userData.sceneObj = true;
+  scene.add(fillLight);
 }
 
 function buildRoad(arenaIdx) {
@@ -2354,10 +2558,17 @@ function startRace() {
   raceTimer = 0; playerBestLap = Infinity; playerTopSpeed = 0;
   raceActive = false; raceFinished = false;
 
-  // Starting grid in the right loop — far from the finish arch at t≈0
-  const startT = Math.PI * 0.5; // mid right-loop; finish line is at t=0 (center crossing)
-  const laneOffsets = [0, -16, 16, -32, 32];
-  const startTs = [startT, startT - 0.05, startT - 0.05, startT - 0.10, startT - 0.10];
+  // Starting grid
+  let startT, laneOffsets, startTs;
+  if (arenaIdx === 5) {
+    startT = 0.15; // east side of circle, offset away from 0/2π to keep lap math clean
+    laneOffsets = [0, -16, 16, -32, 32];
+    startTs = [startT, startT - 0.06, startT - 0.06, startT - 0.12, startT - 0.12];
+  } else {
+    startT = Math.PI * 0.5; // mid right-loop; finish line is at t=0 (center crossing)
+    laneOffsets = [0, -16, 16, -32, 32];
+    startTs = [startT, startT - 0.05, startT - 0.05, startT - 0.10, startT - 0.10];
+  }
 
   // Player car
   const pColor = G.vehicleColors[G.currentVehicle] || VEHICLES[G.currentVehicle].defaultColor;
@@ -2369,7 +2580,9 @@ function startRace() {
     ? ['heavyTract','superTract','tractor','heavyTract','superTract']
     : G.raceConfig.arena === 4
       ? ['sports','muscle','rally','compact','sports','muscle']
-      : ['muscle','rally','sports','pickup','compact','offroad'];
+      : G.raceConfig.arena === 5
+        ? ['monster','offroad','pickup','muscle','superMonster','rally']
+        : ['muscle','rally','sports','pickup','compact','offroad'];
   const aiColors = ['#e74c3c','#3498db','#f39c12','#9b59b6'];
   const diffMults = [0.58, 0.72, 0.88, 1.02];
   const aiMult = diffMults[diff];
@@ -2731,34 +2944,59 @@ function updateMinimap() {
   const ctx = minimapCtx;
   ctx.clearRect(0,0,120,80);
 
-  // Scale
-  const scaleX = 120 / (TRACK_R*2.2);
-  const scaleZ = 80 / (TRACK_R*1.1);
   const cx = 60, cy = 40;
 
-  // Draw track
-  ctx.strokeStyle = '#555';
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  for (let i=0;i<=200;i++) {
-    const t=(i/200)*Math.PI*2;
-    const p=trackPoint(t);
-    const sx = cx + p.x*scaleX;
-    const sy = cy + p.z*scaleZ;
-    if (i===0) ctx.moveTo(sx,sy); else ctx.lineTo(sx,sy);
-  }
-  ctx.stroke();
-
-  // Cars
-  allCars.forEach(c => {
-    if (c.dnf) return;
-    const sx = cx + c.x*scaleX;
-    const sy = cy + c.z*scaleZ;
+  if (G.raceConfig.arena === 5) {
+    // Practice arena: draw circle
+    const mmR = 34;
+    const scaleP = mmR / PRACTICE_R;
+    ctx.strokeStyle = '#888';
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(sx, sy, c===playerCar?3.5:2.5, 0, Math.PI*2);
-    ctx.fillStyle = c===playerCar ? '#ffcc02' : '#ff4444';
-    ctx.fill();
-  });
+    ctx.arc(cx, cy, mmR, 0, Math.PI * 2);
+    ctx.stroke();
+    // AI circuit path (faint inner ring)
+    ctx.strokeStyle = '#444';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, PRACTICE_CIRCUIT_R * scaleP, 0, Math.PI * 2);
+    ctx.stroke();
+    // Cars
+    allCars.forEach(c => {
+      if (c.dnf) return;
+      const sx = cx + c.x * scaleP;
+      const sy = cy + c.z * scaleP;
+      ctx.beginPath();
+      ctx.arc(sx, sy, c===playerCar?3.5:2.5, 0, Math.PI*2);
+      ctx.fillStyle = c===playerCar ? '#ffcc02' : '#ff4444';
+      ctx.fill();
+    });
+  } else {
+    // Lemniscate track
+    const scaleX = 120 / (TRACK_R*2.2);
+    const scaleZ = 80 / (TRACK_R*1.1);
+    ctx.strokeStyle = '#555';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    for (let i=0;i<=200;i++) {
+      const t=(i/200)*Math.PI*2;
+      const p=trackPoint(t);
+      const sx = cx + p.x*scaleX;
+      const sy = cy + p.z*scaleZ;
+      if (i===0) ctx.moveTo(sx,sy); else ctx.lineTo(sx,sy);
+    }
+    ctx.stroke();
+    // Cars
+    allCars.forEach(c => {
+      if (c.dnf) return;
+      const sx = cx + c.x*scaleX;
+      const sy = cy + c.z*scaleZ;
+      ctx.beginPath();
+      ctx.arc(sx, sy, c===playerCar?3.5:2.5, 0, Math.PI*2);
+      ctx.fillStyle = c===playerCar ? '#ffcc02' : '#ff4444';
+      ctx.fill();
+    });
+  }
 }
 
 // ==============================
