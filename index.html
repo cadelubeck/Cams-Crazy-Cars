@@ -263,6 +263,21 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 .set-sec-title{font-size:.85em;color:#ff6b35;font-weight:900;text-transform:uppercase;letter-spacing:2px;margin-bottom:15px}
 .set-input{width:100%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:12px 16px;font-family:inherit;font-size:1em;color:#fff;outline:none;transition:border-color .2s}
 .set-input:focus{border-color:#ff6b35}
+/* Character */
+@keyframes charJump{0%,100%{transform:translateY(0) scaleY(1)}40%,60%{transform:translateY(-24px) scaleY(1.04)}}
+@keyframes charLand{85%,100%{transform:translateY(0) scaleY(0.88)}}
+.char-jumping{animation:charJump .7s ease-in-out infinite;display:block;transform-origin:bottom center}
+.char-type-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}
+.char-type-btn{background:rgba(255,255,255,.06);border:2px solid rgba(255,255,255,.1);border-radius:12px;padding:10px 4px 6px;cursor:pointer;transition:all .2s;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px}
+.char-type-btn:hover{border-color:#ff6b35;background:rgba(255,107,53,.1)}
+.char-type-btn.sel{border-color:#ffcc02;background:rgba(255,204,2,.08)}
+.char-type-lbl{font-size:.62em;font-weight:900;color:#ccc;letter-spacing:.5px}
+.hat-grid{display:flex;gap:7px;flex-wrap:wrap;margin-top:6px}
+.hat-btn{background:rgba(255,255,255,.06);border:2px solid rgba(255,255,255,.1);border-radius:10px;padding:7px 11px;cursor:pointer;transition:all .2s;font-size:.72em;color:#ccc;font-family:inherit;font-weight:900}
+.hat-btn:hover{border-color:#ff6b35;color:#fff}
+.hat-btn.sel{border-color:#ffcc02;color:#ffcc02;background:rgba(255,204,2,.08)}
+.char-preview-box{background:rgba(255,255,255,.04);border-radius:14px;padding:14px;margin-bottom:18px;display:flex;justify-content:center;align-items:flex-end;min-height:115px}
+.char-win-wrap{display:flex;flex-direction:column;align-items:center;margin-bottom:8px}
 </style>
 </head>
 <body>
@@ -412,6 +427,7 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
   <div class="res-title">RACE COMPLETE!</div>
   <div class="res-arena" id="resArena">Grass Fields Arena</div>
   <div class="res-trophy" id="resTrophy">🏆</div>
+  <div id="resCharDisplay" class="char-win-wrap"></div>
   <div class="res-place" id="resPlace">1st</div>
   <div class="res-coins" id="resCoins">+100 🪙</div>
   <div class="res-total" id="resTotal">Total: 300 🪙</div>
@@ -444,6 +460,7 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
     <div class="gar-content">
       <div class="preview-wrap"><canvas id="vehiclePreview"></canvas></div>
       <div class="gar-vehicle-name" id="garVehicleName">Farm Tractor</div>
+      <div id="garCharDisplay" style="display:flex;justify-content:center;margin:6px 0 10px"></div>
       <div class="gar-vehicle-stats" id="garVehicleStats"></div>
 
       <div class="gar-section">
@@ -657,6 +674,7 @@ const G = {
   vehicleColors: {},
   vehicleUpgrades: {},
   vehicleCosmetics: {},
+  character: { type:'cam', shirt:'#e74c3c', pants:'#2c3e50', hat:'cap' },
   stats: {racesWon:0, totalCoins:200, fastestLap:Infinity, crashes:0, rollovers:0},
   raceConfig: {arena:0, difficulty:1, laps:3},
   initialized: false,
@@ -678,6 +696,7 @@ function saveGame(silent=true) {
     currentVehicle: G.currentVehicle, ownedVehicles: G.ownedVehicles,
     vehicleColors: G.vehicleColors, vehicleUpgrades: G.vehicleUpgrades,
     vehicleCosmetics: G.vehicleCosmetics,
+    character: G.character,
     stats: {...G.stats, fastestLap: G.stats.fastestLap === Infinity ? null : G.stats.fastestLap},
     initialized: G.initialized, _savedAt: Date.now(),
   };
@@ -702,6 +721,7 @@ function loadGame() {
       delete save.cosmetics;
     }
     if (save.stats && save.stats.fastestLap === null) save.stats.fastestLap = Infinity;
+    if (!save.character) save.character = { type:'cam', shirt:'#e74c3c', pants:'#2c3e50', hat:'cap' };
     Object.assign(G, save);
     return true;
   } catch(e) { return false; }
@@ -2867,6 +2887,10 @@ function endRace() {
   const resScreen = document.getElementById('resultsScreen');
   resScreen.classList.toggle('first-place', place === 1);
   document.getElementById('resTrophy').textContent = trophy;
+  const resCharEl = document.getElementById('resCharDisplay');
+  if (resCharEl) resCharEl.innerHTML = place === 1
+    ? renderCharSVG(G.character, {w:88, h:145, jump:true, trophy:true})
+    : renderCharSVG(G.character, {w:62, h:102});
   document.getElementById('resCoins').textContent = isPractice ? 'Practice Mode — No Coins' : `+${coins} 🪙`;
   document.getElementById('resTotal').textContent = `Total: ${G.coins} 🪙`;
   document.getElementById('resArena').textContent = `${arenaName} • ${raceLaps} Laps`;
@@ -3324,6 +3348,8 @@ function setLaps(l, btn) {
 function buildGarage() {
   const vd = VEHICLES[G.currentVehicle];
   document.getElementById('garVehicleName').textContent = `${vd.emoji} ${vd.name}`;
+  const garChr = document.getElementById('garCharDisplay');
+  if (garChr) garChr.innerHTML = renderCharSVG(G.character, {w:52, h:86});
 
   const uveh = getVehicleUpgrades(G.currentVehicle);
   const eng = uveh.engine, whl = uveh.wheels, gr = uveh.gears;
@@ -3472,8 +3498,14 @@ function buildShop() {
   const prevArea = document.createElement('div');
   prevArea.style.cssText = 'width:100%;margin-bottom:18px';
   prevArea.innerHTML = `
-    <div class="preview-wrap"><canvas id="vehiclePreview"></canvas></div>
-    <div style="text-align:center;font-size:1.1em;font-weight:900;color:#fff;margin-bottom:4px">${previewVd.emoji} ${previewVd.name}</div>
+    <div style="display:flex;align-items:flex-end;gap:10px">
+      <div class="preview-wrap" style="flex:1;margin-bottom:0"><canvas id="vehiclePreview"></canvas></div>
+      <div style="display:flex;flex-direction:column;align-items:center;padding-bottom:4px;flex-shrink:0">
+        ${renderCharSVG(G.character, {w:48, h:80})}
+        <div style="font-size:.6em;color:#888;margin-top:3px;text-align:center">${G.playerName}</div>
+      </div>
+    </div>
+    <div style="text-align:center;font-size:1.1em;font-weight:900;color:#fff;margin-bottom:4px;margin-top:10px">${previewVd.emoji} ${previewVd.name}</div>
     <div style="text-align:center;font-size:.75em;color:#888;margin-bottom:4px">${previewVd.cat} &mdash; Spd: ${previewVd.spd} &nbsp; Acc: ${previewVd.acc} &nbsp; Han: ${previewVd.han}</div>
   `;
   grid.appendChild(prevArea);
@@ -3549,10 +3581,130 @@ function buildLeaderboard() {
   list.innerHTML = lb.slice(0,10).map((row,i)=>
     `<div class="lb-row${row.name==='YOU'?' lb-you':''}">
       <div class="lb-pos">${i+1}</div>
-      <div class="lb-name">${row.name==='YOU'?'👤 '+G.playerName:row.name}</div>
+      ${row.name==='YOU'
+        ? `<div style="display:flex;align-items:center;gap:8px;flex:1">
+             ${renderCharSVG(G.character,{w:34,h:56})}
+             <div class="lb-name">${G.playerName}</div>
+           </div>`
+        : `<div class="lb-name">${row.name}</div>`}
       <div class="lb-wins">${row.wins} wins</div>
     </div>`
   ).join('');
+}
+
+// ==============================
+// CHARACTER SYSTEM
+// ==============================
+const CHAR_PRESETS = {
+  cam:   { name:'Cam',   skin:'#ffcba4', eyeType:'normal', bodyW:30 },
+  blaze: { name:'Blaze', skin:'#8D5524', eyeType:'cool',   bodyW:28 },
+  rex:   { name:'Rex',   skin:'#d4a574', eyeType:'happy',  bodyW:36 },
+  zip:   { name:'Zip',   skin:'#ffcba4', eyeType:'wide',   bodyW:26 },
+};
+
+function renderCharSVG(cfg, opts) {
+  cfg  = cfg  || {};
+  opts = opts || {};
+  const type   = cfg.type   || 'cam';
+  const shirt  = cfg.shirt  || '#e74c3c';
+  const pants  = cfg.pants  || '#2c3e50';
+  const hat    = cfg.hat    || 'cap';
+  const w      = opts.w     || 60;
+  const h      = opts.h     || 100;
+  const jump   = opts.jump  || false;
+  const trophy = opts.trophy|| false;
+
+  const preset = CHAR_PRESETS[type] || CHAR_PRESETS.cam;
+  const skin   = preset.skin;
+  const bodyW  = preset.bodyW;
+  const eyeT   = preset.eyeType;
+  const dark   = '#111827';
+  // All coords in a 90x115 viewBox; character centered at x=38
+  const cx     = 38;
+  const bx     = cx - bodyW / 2;
+
+  // Hat
+  let hatSVG = '';
+  if (hat === 'cap') {
+    hatSVG = `<rect x="${cx-13}" y="4" width="26" height="13" rx="7" fill="${shirt}"/>
+               <rect x="${cx-18}" y="14" width="36" height="5" rx="2.5" fill="${shirt}"/>`;
+  } else if (hat === 'cowboy') {
+    hatSVG = `<rect x="${cx-11}" y="1" width="22" height="15" rx="3" fill="#7B3F00"/>
+               <ellipse cx="${cx}" cy="16" rx="22" ry="5" fill="#5C2E00"/>`;
+  } else if (hat === 'helmet') {
+    hatSVG = `<ellipse cx="${cx}" cy="9" rx="15" ry="13" fill="#c0392b"/>
+               <rect x="${cx-15}" y="12" width="30" height="10" rx="2" fill="#c0392b"/>
+               <rect x="${cx-12}" y="13" width="24" height="5" rx="2" fill="rgba(120,210,255,0.5)"/>`;
+  } else if (hat === 'beanie') {
+    hatSVG = `<ellipse cx="${cx}" cy="5" rx="14" ry="10" fill="${shirt}"/>
+               <rect x="${cx-15}" y="12" width="30" height="7" rx="3.5" fill="${shirt}"/>
+               <circle cx="${cx}" cy="1" r="3.5" fill="rgba(255,255,255,0.5)"/>`;
+  }
+
+  // Eyes
+  let eyes = '';
+  if (eyeT === 'cool') {
+    eyes = `<line x1="${cx-8}" y1="21" x2="${cx-3}" y2="21" stroke="${dark}" stroke-width="2.5" stroke-linecap="round"/>
+            <line x1="${cx+3}" y1="21" x2="${cx+8}" y2="21" stroke="${dark}" stroke-width="2.5" stroke-linecap="round"/>`;
+  } else if (eyeT === 'wide') {
+    eyes = `<circle cx="${cx-7}" cy="21" r="3.5" fill="#fff"/><circle cx="${cx-7}" cy="21" r="2.2" fill="${dark}"/><circle cx="${cx-8}" cy="20" r="0.8" fill="#fff"/>
+            <circle cx="${cx+7}" cy="21" r="3.5" fill="#fff"/><circle cx="${cx+7}" cy="21" r="2.2" fill="${dark}"/><circle cx="${cx+6}" cy="20" r="0.8" fill="#fff"/>`;
+  } else if (eyeT === 'happy') {
+    eyes = `<path d="M ${cx-8} 18 Q ${cx-5} 23 ${cx-2} 18" stroke="${dark}" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+            <path d="M ${cx+2} 18 Q ${cx+5} 23 ${cx+8} 18" stroke="${dark}" stroke-width="2.2" fill="none" stroke-linecap="round"/>`;
+  } else {
+    eyes = `<circle cx="${cx-6}" cy="21" r="2.3" fill="${dark}"/><circle cx="${cx-7}" cy="20" r="0.8" fill="#fff"/>
+            <circle cx="${cx+6}" cy="21" r="2.3" fill="${dark}"/><circle cx="${cx+5}" cy="20" r="0.8" fill="#fff"/>`;
+  }
+
+  // Mouth
+  let mouth = '';
+  if (eyeT === 'cool') {
+    mouth = `<line x1="${cx-4}" y1="27" x2="${cx+4}" y2="27" stroke="${dark}" stroke-width="1.5" stroke-linecap="round"/>`;
+  } else if (eyeT === 'happy') {
+    mouth = `<path d="M ${cx-8} 26 Q ${cx} 34 ${cx+8} 26" stroke="${dark}" stroke-width="2" fill="none" stroke-linecap="round"/>`;
+  } else {
+    mouth = `<path d="M ${cx-5} 26 Q ${cx} 30 ${cx+5} 26" stroke="${dark}" stroke-width="1.5" fill="none" stroke-linecap="round"/>`;
+  }
+
+  // Trophy arm raised when holding trophy
+  const rArmY = trophy ? 19 : 36;
+  const rArmH = trophy ? 22 : 26;
+
+  // Trophy SVG placed beside raised arm
+  let trophySVG = '';
+  if (trophy) {
+    const tx = bx + bodyW + 16;
+    trophySVG = `
+      <ellipse cx="${tx+2}" cy="8" rx="9" ry="9" fill="#f9ca24"/>
+      <rect x="${tx-2}" y="15" width="8" height="3" rx="1" fill="#e0a800"/>
+      <rect x="${tx}" y="17" width="4" height="14" rx="2" fill="#f9ca24"/>
+      <rect x="${tx-4}" y="29" width="12" height="3" rx="1.5" fill="#f9ca24"/>`;
+  }
+
+  const jc = jump ? ' char-jumping' : '';
+
+  return `<svg class="char-figure${jc}" width="${w}" height="${h}" viewBox="0 0 90 115" xmlns="http://www.w3.org/2000/svg">
+    ${hatSVG}
+    <circle cx="${cx}" cy="21" r="13" fill="${skin}"/>
+    ${eyes}${mouth}
+    <rect x="${cx-3}" y="33" width="6" height="5" fill="${skin}"/>
+    <rect x="${bx}" y="37" width="${bodyW}" height="30" rx="6" fill="${shirt}"/>
+    <rect x="${bx-14}" y="37" width="14" height="26" rx="7" fill="${shirt}"/>
+    <rect x="${bx+bodyW}" y="${rArmY}" width="14" height="${rArmH}" rx="7" fill="${shirt}"/>
+    ${trophySVG}
+    <rect x="${bx+2}" y="66" width="13" height="38" rx="6" fill="${pants}"/>
+    <rect x="${bx+bodyW-15}" y="66" width="13" height="38" rx="6" fill="${pants}"/>
+    <rect x="${bx-2}" y="97" width="20" height="10" rx="4" fill="${dark}"/>
+    <rect x="${bx+bodyW-18}" y="97" width="20" height="10" rx="4" fill="${dark}"/>
+  </svg>`;
+}
+
+function setChar(key, val) {
+  if (!G.character) G.character = { type:'cam', shirt:'#e74c3c', pants:'#2c3e50', hat:'cap' };
+  G.character[key] = val;
+  saveGame();
+  buildSettings();
 }
 
 // ==============================
@@ -3567,12 +3719,40 @@ function buildSettings() {
       return d ? new Date(d).toLocaleString() : null;
     } catch(e) { return null; }
   })();
+  const chr = G.character || { type:'cam', shirt:'#e74c3c', pants:'#2c3e50', hat:'cap' };
   document.getElementById('settingsContent').innerHTML = `
     <div class="set-section">
       <div class="set-sec-title">👤 Player Profile</div>
       <div style="margin-bottom:12px;font-size:.85em;color:#aaa">Display name shown on leaderboard</div>
       <input type="text" class="set-input" id="nameInput" value="${G.playerName}" maxlength="20" placeholder="Enter name...">
       <button class="btn btn-sm btn-green" style="margin-top:12px;width:100%" onclick="saveName()">Save Name</button>
+    </div>
+    <div class="set-section">
+      <div class="set-sec-title">🧑 Your Character</div>
+      <div class="char-preview-box">
+        ${renderCharSVG(chr, {w:70, h:116})}
+      </div>
+      <div style="font-size:.75em;color:#888;margin-bottom:8px;font-weight:900;letter-spacing:1px;text-transform:uppercase">Character Style</div>
+      <div class="char-type-grid">
+        ${Object.entries(CHAR_PRESETS).map(([k,p]) => `
+          <div class="char-type-btn${chr.type===k?' sel':''}" onclick="setChar('type','${k}')">
+            ${renderCharSVG({...chr, type:k}, {w:45, h:74})}
+            <div class="char-type-lbl">${p.name}</div>
+          </div>`).join('')}
+      </div>
+      <div style="font-size:.75em;color:#888;margin-bottom:8px;font-weight:900;letter-spacing:1px;text-transform:uppercase">Shirt Color</div>
+      <div class="color-grid" style="margin-bottom:14px">
+        ${COLORS.map(c=>`<div class="color-swatch${chr.shirt===c.hex?' active':''}" style="background:${c.hex}" title="${c.name}" onclick="setChar('shirt','${c.hex}')"></div>`).join('')}
+      </div>
+      <div style="font-size:.75em;color:#888;margin-bottom:8px;font-weight:900;letter-spacing:1px;text-transform:uppercase">Pants Color</div>
+      <div class="color-grid" style="margin-bottom:14px">
+        ${COLORS.map(c=>`<div class="color-swatch${chr.pants===c.hex?' active':''}" style="background:${c.hex}" title="${c.name}" onclick="setChar('pants','${c.hex}')"></div>`).join('')}
+      </div>
+      <div style="font-size:.75em;color:#888;margin-bottom:8px;font-weight:900;letter-spacing:1px;text-transform:uppercase">Hat</div>
+      <div class="hat-grid">
+        ${[['none','No Hat'],['cap','Cap 🧢'],['cowboy','Cowboy 🤠'],['helmet','Helmet ⛑️'],['beanie','Beanie 🧶']].map(([k,l])=>
+          `<button class="hat-btn${chr.hat===k?' sel':''}" onclick="setChar('hat','${k}')">${l}</button>`).join('')}
+      </div>
     </div>
     <div class="set-section">
       <div class="set-sec-title">💾 Save Data</div>
