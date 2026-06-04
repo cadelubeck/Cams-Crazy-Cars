@@ -217,8 +217,11 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 .lb-row{display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:12px 16px;margin-bottom:8px}
 .lb-pos{width:30px;font-size:1.2em;font-weight:900;color:#ffcc02}
 .lb-name{flex:1;font-size:.95em;font-weight:900}
-.lb-wins{color:#888;font-size:.85em}
+.lb-wins{color:#888;font-size:.85em;text-align:right}
+.lb-time{color:#aaa;font-size:.75em;text-align:right;min-width:70px}
 .lb-you{border-color:rgba(255,204,2,.3);background:rgba(255,204,2,.08)}
+.lb-global-badge{display:inline-block;background:rgba(0,200,130,.15);border:1px solid rgba(0,200,130,.35);color:#00c882;font-size:.7em;padding:2px 8px;border-radius:20px;margin-left:8px}
+.lb-offline-badge{display:inline-block;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#888;font-size:.7em;padding:2px 8px;border-radius:20px;margin-left:8px}
 
 /* Notification */
 #notif{position:fixed;top:70px;left:50%;transform:translateX(-50%) translateY(-15px);background:rgba(10,10,30,.95);border:1px solid rgba(255,255,255,.15);padding:10px 22px;border-radius:50px;font-size:.9em;opacity:0;transition:all .3s;z-index:999;pointer-events:none;white-space:nowrap}
@@ -279,6 +282,66 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
 .char-preview-box{background:rgba(255,255,255,.04);border-radius:14px;padding:14px;margin-bottom:18px;display:flex;justify-content:center;align-items:flex-end;min-height:115px}
 .char-win-wrap{display:flex;flex-direction:column;align-items:center;margin-bottom:8px}
 </style>
+<!-- Firebase SDK -->
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getDatabase, ref, set, get, onValue, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+
+// ── FIREBASE CONFIG ──────────────────────────────────────────────────────────
+// To enable global leaderboard: create a free Firebase project at
+//   https://console.firebase.google.com
+// Enable Realtime Database (start in test mode) and Anonymous Authentication,
+// then paste your project's firebaseConfig object here.
+// ─────────────────────────────────────────────────────────────────────────────
+const FIREBASE_CONFIG = {
+  apiKey: "",
+  authDomain: "",
+  databaseURL: "",
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: ""
+};
+
+const FB_READY = FIREBASE_CONFIG.databaseURL !== '';
+let _db = null, _uid = null;
+
+if (FB_READY) {
+  const app = initializeApp(FIREBASE_CONFIG);
+  _db = getDatabase(app);
+  const auth = getAuth(app);
+  signInAnonymously(auth).catch(() => {});
+  onAuthStateChanged(auth, user => { if (user) _uid = user.uid; });
+}
+
+window._fbSubmitScore = async function(name, wins, bestLap, totalRaceTime) {
+  if (!FB_READY || !_uid) return;
+  try {
+    await set(ref(_db, 'leaderboard/' + _uid), {
+      name: String(name).slice(0, 24),
+      wins: wins || 0,
+      bestLap: (bestLap && isFinite(bestLap)) ? Math.round(bestLap * 10) / 10 : null,
+      totalRaceTime: Math.round(totalRaceTime || 0),
+      updated: Date.now()
+    });
+  } catch(e) {}
+};
+
+window._fbGetLeaderboard = async function() {
+  if (!FB_READY || !_db) return null;
+  try {
+    const snap = await get(ref(_db, 'leaderboard'));
+    if (!snap.exists()) return [];
+    const rows = [];
+    snap.forEach(child => { rows.push({uid: child.key, ...child.val()}); });
+    return rows;
+  } catch(e) { return null; }
+};
+
+window._fbUid = () => _uid;
+window._fbReady = () => FB_READY;
+</script>
 </head>
 <body>
 <canvas id="gc"></canvas>
@@ -507,7 +570,7 @@ kbd{background:rgba(255,255,255,.12);border-radius:4px;padding:1px 5px;color:#cc
   <div style="width:100%;background:linear-gradient(135deg,#0f0c29,#302b63);padding:15px 0;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0">
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;padding:0 15px">
       <button class="btn btn-sec btn-sm" onclick="showScreen('menuScreen')">← Menu</button>
-      <div style="font-size:1.4em;font-weight:900;color:#ffcc02">🏆 Leaderboard</div>
+      <div style="font-size:1.4em;font-weight:900;color:#ffcc02">🏆 Leaderboard <span id="lbBadge" class="lb-offline-badge">Local</span></div>
     </div>
     <div class="cross-nav" style="margin-bottom:0;padding:10px 15px;border-bottom:none">
       <div class="cross-nav-btn" onclick="buildArenaCards();showScreen('raceSetupScreen')">🏁 Race</div>
@@ -565,6 +628,7 @@ const VEHICLES = {
   heavyTract:   {name:'Heavy Tractor',      emoji:'⚙️🚜', cost:800,  cat:'Tractor', spd:8, acc:.24, han:.028, defaultColor:'#7f8c8d'},
   superTract:   {name:'Super Tractor',      emoji:'💪🚜', cost:1500, cat:'Tractor', spd:12, acc:.32, han:.036, defaultColor:'#f39c12'},
   superMonster: {name:'Super Monster Truck',emoji:'💀🚛', cost:2500, cat:'Truck',   spd:14, acc:.32, han:.028, defaultColor:'#8b0000'},
+  superRace:    {name:'Super Race Car',      emoji:'🏁🏎️', cost:900,  cat:'Car',     spd:22, acc:.56, han:.065, defaultColor:'#ff2222'},
 };
 
 const ARENAS = [
@@ -582,6 +646,8 @@ const ARENAS = [
    desc:'Huge open arena — drive free! Jumps, rocks and trees everywhere.'},
   {id:'snow', name:'Snow Circuit', emoji:'❄️', lock:4, color:0xe8f4fc, fogColor:0xd0e8f8, sky:0xbdd9f2,
    desc:'Icy oval circuit — slide around every corner! Speed makes you drift more.'},
+  {id:'fall', name:'Autumn Leaf Circuit', emoji:'🍂', lock:10, color:0x8b6914, fogColor:0xd4a050, sky:0xe8b87a,
+   desc:'Leaf piles launch you into the air! Slippery wet leaves on a golden autumn track.'},
 ];
 
 // Returns physics multipliers for the current race surface
@@ -622,6 +688,9 @@ function getSurfaceModifiers(arenaIdx, vehicleId) {
     ? {handling:1.10, accel:0.80, maxSpd:0.88, drag:0.88} // moto on packed dirt: decent but not great
     : {handling:1.05, accel:0.90, maxSpd:0.95, drag:0.90};
   if (arenaIdx === 6) return {handling: 0.60, accel: 0.88, maxSpd: 1.02, drag: 0.93, snowSlide: true};
+  if (arenaIdx === 7) return isMoto
+    ? {handling: 0.82, accel: 0.60, maxSpd: 0.75, drag: 0.84}
+    : {handling: 0.88, accel: 0.70, maxSpd: 0.85, drag: 0.85};
   return {handling:1.0, accel:1.0, maxSpd:1.0, drag:0.88};
 }
 
@@ -678,7 +747,7 @@ const G = {
   vehicleUpgrades: {},
   vehicleCosmetics: {},
   character: { type:'cam', shirt:'#e74c3c', pants:'#2c3e50', hat:'cap' },
-  stats: {racesWon:0, totalCoins:200, fastestLap:Infinity, crashes:0, rollovers:0},
+  stats: {racesWon:0, totalCoins:200, fastestLap:Infinity, crashes:0, rollovers:0, totalRaceTime:0},
   raceConfig: {arena:0, difficulty:1, laps:3},
   initialized: false,
 };
@@ -774,7 +843,7 @@ function startEngineSound(vehicleId) {
   // (engine sound removed)
   const vd = vehicleId && VEHICLES[vehicleId];
   const cat = vd ? vd.cat : 'Car';
-  const isRace = vehicleId === 'sports' || vehicleId === 'rally' || vehicleId === 'muscle';
+  const isRace = vehicleId === 'sports' || vehicleId === 'rally' || vehicleId === 'muscle' || vehicleId === 'superRace';
   engineProfile = cat === 'Tractor' ? 'tractor' : (isRace ? 'race' : 'car');
 
   const ctx = getAudioCtx();
@@ -1576,6 +1645,10 @@ function buildCarMesh(vehicleId, colorHex, cosmetics=[]) {
     // Oversized monster — huge wheels, tall body, aggressive stance
     bw=5.5*S; bh=2.4*S; bl=8.0*S; cw=4.8*S; ch=1.6*S; cl=3.2*S; cz=0.8*S;
     wr=1.9*S; ww=1.1*S; fwz=2.8*S; rwz=3.2*S; fwr=1.9*S;
+  } else if (vehicleId === 'superRace') {
+    // Ultra-low, wide formula-style body
+    bw=4.2*S; bh=0.75*S; bl=7.5*S; cw=2.6*S; ch=0.65*S; cl=2.2*S; cz=0.5*S;
+    wr=0.70*S; ww=0.62*S; fwz=2.4*S; rwz=2.6*S; fwr=0.70*S;
   } else if (cat === 'Truck') {
     bw=4.0*S; bh=1.9*S; bl=7.5*S; cw=3.5*S; ch=1.3*S; cl=2.8*S; cz=1.0*S;
     wr=1.0*S; ww=0.7*S; fwz=2.2*S; rwz=2.6*S; fwr=1.0*S;
@@ -1914,6 +1987,7 @@ function buildScene(arenaIdx) {
   if (arenaIdx === 3) addMudPits();
   if (arenaIdx === 4) addAsphaltMarkings();
   if (arenaIdx === 6) addSnowmen();
+  if (arenaIdx === 7) addLeafPiles();
 }
 
 function buildPracticeArena() {
@@ -2087,7 +2161,7 @@ function buildRoad(arenaIdx) {
   roadGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
   roadGeo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
   roadGeo.setIndex(indices);
-  const roadMat = new THREE.MeshLambertMaterial({color: arenaIdx===1?0xd4a573:arenaIdx===6?0xd8eaf8:0x3d3d3d});
+  const roadMat = new THREE.MeshLambertMaterial({color: arenaIdx===1?0xd4a573:arenaIdx===6?0xd8eaf8:arenaIdx===7?0x5a3e10:0x3d3d3d});
   const road = new THREE.Mesh(roadGeo, roadMat);
   road.receiveShadow = true;
   road.userData.sceneObj = true;
@@ -2196,7 +2270,7 @@ function addCurbsAndBarriers(arenaIdx) {
       geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
       geo.setAttribute('normal',   new THREE.Float32BufferAttribute(nrm, 3));
       geo.setIndex(idx);
-      const color = seg % 2 === 0 ? (arenaIdx===6?0x2299dd:0xdd1111) : 0xffffff;
+      const color = seg % 2 === 0 ? (arenaIdx===6?0x2299dd:arenaIdx===7?0xe87010:0xdd1111) : 0xffffff;
       const m = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({color, side: THREE.DoubleSide}));
       m.userData.sceneObj = true;
       scene.add(m);
@@ -2204,7 +2278,7 @@ function addCurbsAndBarriers(arenaIdx) {
   }
 
   // --- CONCRETE BARRIER WALLS (inner face + top stripe) ---
-  const wallColor = arenaIdx === 1 ? 0xd6c494 : arenaIdx === 6 ? 0xaacce0 : 0xb8b8b8;
+  const wallColor = arenaIdx === 1 ? 0xd6c494 : arenaIdx === 6 ? 0xaacce0 : arenaIdx === 7 ? 0x8b5e2a : 0xb8b8b8;
   for (const side of [-1, 1]) {
     const wallCenterOff = side * (roadW / 2 + curbW + wallD / 2);
 
@@ -2447,7 +2521,7 @@ function addGrandstands() {
 function addTrees(arenaIdx) {
   const rng = mulberry32(12345);
   const trunkMat = new THREE.MeshLambertMaterial({color:arenaIdx===1?0xc2a46e:0x5d4037});
-  const leafMat  = new THREE.MeshLambertMaterial({color:arenaIdx===1?0xc2a46e:arenaIdx===6?0xddeeff:0x2d7a3a});
+  const leafMat  = new THREE.MeshLambertMaterial({color:arenaIdx===1?0xc2a46e:arenaIdx===6?0xddeeff:arenaIdx===7?0xd4620a:0x2d7a3a});
 
   function placeTree(x, z, h, isObstacle) {
     const trunkR = isObstacle ? 1.2 : 0.5;
@@ -2732,6 +2806,85 @@ function addSnowmen() {
   }
 }
 
+function addLeafPiles() {
+  const rng = mulberry32(86420);
+  const leafColors = [0xd4620a, 0xc43c0a, 0xe8a020, 0xb85c08, 0xdd8800];
+  const makeMat = () => new THREE.MeshLambertMaterial({color: leafColors[Math.floor(rng() * leafColors.length)]});
+
+  // Background decorative leaf mounds off the track
+  for (let i = 0; i < 22; i++) {
+    const angle = rng() * Math.PI * 2;
+    const rad = 140 + rng() * 260;
+    const x = Math.cos(angle) * rad;
+    const z = Math.sin(angle) * rad;
+    const {dist} = nearestTrackT(x, z, 0);
+    if (dist < TRACK_WIDTH / 2 + 18) continue;
+    const pile = new THREE.Mesh(new THREE.SphereGeometry(6 + rng() * 10, 7, 5), makeMat());
+    pile.position.set(x, -2, z);
+    pile.scale.set(1.6, 0.6, 1.3);
+    pile.userData.sceneObj = true;
+    scene.add(pile);
+  }
+
+  // Scattered flat leaf patches on/near track for atmosphere
+  for (let i = 0; i < 40; i++) {
+    const t = rng() * Math.PI * 2;
+    const pt = trackPoint(t);
+    const tang = trackTangent(t);
+    const perp = new THREE.Vector3(-tang.z, 0, tang.x);
+    const side = (rng() - 0.5) * TRACK_WIDTH * 0.8;
+    const lx = pt.x + perp.x * side;
+    const lz = pt.z + perp.z * side;
+    const patch = new THREE.Mesh(
+      new THREE.PlaneGeometry(4 + rng() * 8, 3 + rng() * 6),
+      new THREE.MeshLambertMaterial({color: leafColors[Math.floor(rng() * leafColors.length)], transparent: true, opacity: 0.75})
+    );
+    patch.rotation.x = -Math.PI / 2;
+    patch.position.set(lx, 0.06, lz);
+    patch.userData.sceneObj = true;
+    scene.add(patch);
+  }
+
+  // Jump leaf piles ON the track — ramp shape like sand dunes
+  const rampColors = [0xc43c0a, 0xd4620a, 0xe8a020, 0xb85c08, 0xdd8800, 0xc05000];
+  const pileCount = 6;
+  for (let i = 0; i < pileCount; i++) {
+    const t = (i / pileCount) * Math.PI * 2 + 0.5 + rng() * 0.35;
+    const pt = trackPoint(t);
+    const tang = trackTangent(t);
+    const pileW = TRACK_WIDTH * 0.58;
+    const pileH = 4.5 + rng() * 3.5;
+    const pileD = 16 + rng() * 10;
+    const rampColor = rampColors[i % rampColors.length];
+    const ramp = new THREE.Mesh(
+      new THREE.BoxGeometry(pileW, pileH, pileD),
+      new THREE.MeshLambertMaterial({color: rampColor})
+    );
+    ramp.position.set(pt.x, pileH * 0.38, pt.z);
+    const ang = Math.atan2(tang.x, tang.z);
+    ramp.rotation.y = ang;
+    ramp.rotation.x = -0.20;
+    ramp.userData.sceneObj = true;
+    ramp.castShadow = true;
+    scene.add(ramp);
+    // Small leaf clumps on top of each ramp for visual flair
+    for (let j = 0; j < 3; j++) {
+      const lump = new THREE.Mesh(
+        new THREE.SphereGeometry(1.5 + rng() * 1.5, 6, 4),
+        new THREE.MeshLambertMaterial({color: leafColors[Math.floor(rng() * leafColors.length)]})
+      );
+      lump.position.set(
+        pt.x + (rng() - 0.5) * pileW * 0.5,
+        pileH * 0.8 + rng() * 1.5,
+        pt.z + (rng() - 0.5) * pileD * 0.3
+      );
+      lump.userData.sceneObj = true;
+      scene.add(lump);
+    }
+    jumpZones.push({x: pt.x, z: pt.z, r: pileD * 0.6, boost: 16 + pileH * 1.4});
+  }
+}
+
 // Simple seeded RNG
 function mulberry32(a) {
   return function() {
@@ -2815,7 +2968,9 @@ function startRace() {
         ? ['monster','offroad','pickup','muscle','superMonster','rally']
         : G.raceConfig.arena === 6
           ? ['rally','sports','muscle','compact','offroad','pickup']
-          : ['muscle','rally','moto','pickup','compact','offroad'];
+          : G.raceConfig.arena === 7
+            ? ['offroad','pickup','muscle','rally','compact','sports']
+            : ['muscle','rally','moto','pickup','compact','offroad'];
   const aiColors = ['#e74c3c','#3498db','#f39c12','#9b59b6'];
   const diffMults = [0.58, 0.72, 0.88, 1.02];
   const aiMult = diffMults[diff];
@@ -2847,6 +3002,7 @@ function startRace() {
     lastTime = now;
     if (raceActive && !raceFinished) {
       raceTimer += dt;
+      G.stats.totalRaceTime = (G.stats.totalRaceTime || 0) + dt;
       updatePhysics(dt);
       updateCamera(dt);
       updateHUD();
@@ -2968,11 +3124,18 @@ function endRace() {
   const place = finalOrder.indexOf(playerCar) + 1;
   playCheer(place === 1);
   const isPractice = G.raceConfig.arena === 5;
-  const coins = isPractice ? 0 : PLACE_REWARDS[Math.min(place, 5)];
+  const diffCoinMults = [0.5, 1.0, 1.5, 2.0];
+  const tooFewLaps = raceLaps < 3;
+  const baseReward = PLACE_REWARDS[Math.min(place, 5)];
+  const coins = (isPractice || tooFewLaps) ? 0 : Math.round(baseReward * diffCoinMults[G.raceConfig.difficulty]);
   G.coins += coins;
   G.stats.totalCoins += coins;
   if (place === 1 && !isPractice) G.stats.racesWon++;
   G.xp += isPractice ? 0 : (6 - place) * 20;
+  // Submit to global leaderboard
+  if (!isPractice && typeof window._fbSubmitScore === 'function') {
+    window._fbSubmitScore(G.playerName, G.stats.racesWon, G.stats.fastestLap, G.stats.totalRaceTime || 0);
+  }
   const newLevel = Math.floor(G.xp / 200) + 1;
   if (newLevel > G.level) { G.level = newLevel; notify(`Level Up! Now Level ${G.level} 🎉`, 'good'); }
   saveGame();
@@ -2991,7 +3154,7 @@ function endRace() {
   if (resCharEl) resCharEl.innerHTML = place === 1
     ? renderCharSVG(G.character, {w:88, h:145, jump:true, trophy:true})
     : renderCharSVG(G.character, {w:62, h:102});
-  document.getElementById('resCoins').textContent = isPractice ? 'Practice Mode — No Coins' : `+${coins} 🪙`;
+  document.getElementById('resCoins').textContent = isPractice ? 'Practice Mode — No Coins' : tooFewLaps ? 'Race 3+ laps to earn coins!' : `+${coins} 🪙`;
   document.getElementById('resTotal').textContent = `Total: ${G.coins} 🪙`;
   document.getElementById('resArena').textContent = `${arenaName} • ${raceLaps} Laps`;
   document.getElementById('resTime').textContent = playerBestLap === Infinity ? '—' : formatTime(playerBestLap);
@@ -3694,26 +3857,72 @@ function equipVehicle(vid) {
 // ==============================
 // LEADERBOARD
 // ==============================
-function buildLeaderboard() {
-  const lb = [...LEADERBOARD_DATA];
-  // Update player row
-  const pIdx = lb.findIndex(r=>r.name==='YOU');
-  if (pIdx>=0) lb[pIdx].wins = G.stats.racesWon;
-  lb.sort((a,b)=>b.wins-a.wins);
+function fmtHours(secs) {
+  if (!secs || secs < 60) return secs ? Math.round(secs) + 's' : '0s';
+  if (secs < 3600) return Math.floor(secs / 60) + 'm';
+  const h = (secs / 3600).toFixed(1);
+  return h + 'h';
+}
 
+function renderLbRows(rows, isGlobal) {
+  const badge = document.getElementById('lbBadge');
+  if (badge) {
+    badge.textContent = isGlobal ? 'Global' : 'Local';
+    badge.className = isGlobal ? 'lb-global-badge' : 'lb-offline-badge';
+  }
+  const myUid = typeof window._fbUid === 'function' ? window._fbUid() : null;
   const list = document.getElementById('lbList');
-  list.innerHTML = lb.slice(0,10).map((row,i)=>
-    `<div class="lb-row${row.name==='YOU'?' lb-you':''}">
-      <div class="lb-pos">${i+1}</div>
-      ${row.name==='YOU'
+  list.innerHTML = rows.slice(0, 12).map((row, i) => {
+    const isYou = row.isYou || (myUid && row.uid === myUid);
+    const hoursStr = row.totalRaceTime ? fmtHours(row.totalRaceTime) : '—';
+    const lapStr = row.bestLap ? formatTime(row.bestLap) : '—';
+    return `<div class="lb-row${isYou ? ' lb-you' : ''}">
+      <div class="lb-pos">${i + 1}</div>
+      ${isYou
         ? `<div style="display:flex;align-items:center;gap:8px;flex:1">
-             ${renderCharSVG(G.character,{w:34,h:56})}
-             <div class="lb-name">${G.playerName}</div>
+             ${renderCharSVG(G.character, {w:30, h:50})}
+             <div>
+               <div class="lb-name">${G.playerName}</div>
+               <div style="font-size:.7em;color:#aaa">Best: ${lapStr}</div>
+             </div>
            </div>`
-        : `<div class="lb-name">${row.name}</div>`}
-      <div class="lb-wins">${row.wins} wins</div>
-    </div>`
-  ).join('');
+        : `<div style="flex:1">
+             <div class="lb-name">${row.name || 'Racer'}</div>
+             <div style="font-size:.7em;color:#aaa">Best: ${lapStr}</div>
+           </div>`}
+      <div style="text-align:right">
+        <div class="lb-wins">${row.wins || 0} 🏆</div>
+        <div class="lb-time">${hoursStr} raced</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function buildLeaderboard() {
+  const list = document.getElementById('lbList');
+  list.innerHTML = '<div style="text-align:center;color:#888;padding:20px">Loading...</div>';
+
+  // Try Firebase first
+  if (typeof window._fbGetLeaderboard === 'function') {
+    const fbRows = await window._fbGetLeaderboard();
+    if (fbRows && fbRows.length > 0) {
+      fbRows.sort((a, b) => (b.wins || 0) - (a.wins || 0));
+      renderLbRows(fbRows, true);
+      return;
+    }
+  }
+
+  // Fallback: local data with player row merged in
+  const lb = [...LEADERBOARD_DATA];
+  const pIdx = lb.findIndex(r => r.name === 'YOU');
+  if (pIdx >= 0) {
+    lb[pIdx].wins = G.stats.racesWon;
+    lb[pIdx].bestLap = G.stats.fastestLap;
+    lb[pIdx].totalRaceTime = G.stats.totalRaceTime || 0;
+    lb[pIdx].isYou = true;
+  }
+  lb.sort((a, b) => (b.wins || 0) - (a.wins || 0));
+  renderLbRows(lb, false);
 }
 
 // ==============================
