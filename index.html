@@ -56,6 +56,27 @@ body{font-family:'Arial Black',Impact,sans-serif;background:#0a0a1a;overflow:hid
 .tb-lbl{font-size:.55em;color:#888;letter-spacing:1px;text-transform:uppercase}
 .tb-val{font-size:1em;font-weight:900;color:#ffcc02}
 
+/* Profile / Account screen */
+#profileScreen{background:linear-gradient(135deg,#0f0c29,#1a1040,#24243e);overflow-y:auto;justify-content:flex-start;padding:30px 15px}
+.prof-title{font-size:clamp(2em,6vw,3.5em);font-weight:900;background:linear-gradient(45deg,#ff6b35,#ffcc02,#ff6b35);background-size:300%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:gradAnim 3s infinite;text-align:center;margin-bottom:6px}
+.prof-sub{color:#888;font-size:.8em;letter-spacing:3px;text-transform:uppercase;margin-bottom:28px;text-align:center}
+.prof-list{width:100%;max-width:420px;display:flex;flex-direction:column;gap:12px;margin-bottom:20px}
+.prof-card{display:flex;align-items:center;gap:14px;background:rgba(255,255,255,.06);border:2px solid rgba(255,255,255,.1);border-radius:18px;padding:16px 18px;transition:all .2s}
+.prof-card:hover{border-color:rgba(255,107,53,.5);background:rgba(255,107,53,.07)}
+.prof-info{flex:1;min-width:0}
+.prof-name{font-size:1.15em;font-weight:900;color:#fff;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prof-meta{font-size:.75em;color:#888}
+.prof-actions{display:flex;gap:8px;flex-shrink:0}
+.prof-play{background:linear-gradient(135deg,#ff6b35,#e55);border:none;color:#fff;font-family:inherit;font-weight:900;font-size:.85em;padding:10px 18px;border-radius:12px;cursor:pointer;transition:all .2s}
+.prof-play:hover{transform:scale(1.05);filter:brightness(1.15)}
+.prof-del{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);color:#888;font-family:inherit;font-size:.8em;padding:10px 12px;border-radius:12px;cursor:pointer;transition:all .2s}
+.prof-del:hover{border-color:#e55;color:#e55}
+.prof-new-card{border:2px dashed rgba(255,255,255,.15);background:transparent;border-radius:18px;padding:22px;text-align:center;cursor:pointer;color:#888;transition:all .2s;font-family:inherit;width:100%}
+.prof-new-card:hover{border-color:#ff6b35;color:#ff6b35;background:rgba(255,107,53,.05)}
+.prof-create{width:100%;max-width:420px;display:flex;flex-direction:column;gap:12px}
+.prof-input{background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.15);border-radius:14px;padding:14px 18px;color:#fff;font-family:inherit;font-size:1.1em;font-weight:900;width:100%;text-align:center;outline:none}
+.prof-input:focus{border-color:#ff6b35}
+
 /* Menu */
 #menuScreen{background:linear-gradient(135deg,#0f0c29,#302b63,#24243e)}
 .menu-logo{font-size:clamp(1.8em,5vw,3.5em);font-weight:900;background:linear-gradient(45deg,#ff6b35,#ffcc02,#ff6b35);background-size:300%;-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:gradAnim 3s infinite;text-align:center;margin-bottom:8px;margin-top:60px}
@@ -351,6 +372,18 @@ window._fbReady = () => FB_READY;
   <div class="load-title">CAM'S CRAZY 8 CARS</div>
   <div class="load-sub">Loading the chaos...</div>
   <div class="load-bar-bg"><div class="load-bar" id="loadBar"></div></div>
+</div>
+
+<!-- Profile / Account Selector -->
+<div id="profileScreen" class="screen">
+  <div class="prof-title">CAM'S CRAZY 8 CARS</div>
+  <div class="prof-sub">Choose Your Account</div>
+  <div class="prof-list" id="profList"></div>
+  <div class="prof-create" id="profCreate" style="display:none">
+    <input type="text" class="prof-input" id="profNameInput" maxlength="20" placeholder="Enter your name..." onkeydown="if(event.key==='Enter')confirmCreateProfile()" />
+    <button class="btn" onclick="confirmCreateProfile()">Create Account</button>
+    <button class="btn btn-sec" onclick="cancelCreateProfile()">← Back</button>
+  </div>
 </div>
 
 <!-- Welcome -->
@@ -762,6 +795,124 @@ function getVehicleCosmetics(vid) {
   return G.vehicleCosmetics[vid];
 }
 
+// ==============================
+// PROFILE / ACCOUNT SYSTEM
+// ==============================
+function getProfiles() {
+  try { return JSON.parse(localStorage.getItem('cc8c_profiles') || '[]'); } catch(e) { return []; }
+}
+function saveProfiles(profiles) {
+  localStorage.setItem('cc8c_profiles', JSON.stringify(profiles));
+}
+function getCurrentProfileId() {
+  return localStorage.getItem('cc8c_current_profile') || null;
+}
+function setCurrentProfileId(id) {
+  localStorage.setItem('cc8c_current_profile', id);
+}
+function getSaveKey(id) {
+  return id === 'legacy' ? 'cc8c_save' : 'cc8c_save_' + id;
+}
+
+function buildProfileScreen() {
+  const profiles = getProfiles();
+  const listEl = document.getElementById('profList');
+  const createEl = document.getElementById('profCreate');
+  createEl.style.display = 'none';
+  if (profiles.length === 0) {
+    listEl.innerHTML = `<div style="text-align:center;color:#888;padding:20px">No accounts yet.<br>Create one below!</div>`;
+  } else {
+    listEl.innerHTML = profiles.map(p => `
+      <div class="prof-card">
+        <div style="font-size:2em;flex-shrink:0">👤</div>
+        <div class="prof-info">
+          <div class="prof-name">${p.name}</div>
+          <div class="prof-meta">Level ${p.level || 1} · ${p.coins || 0} 🪙 · ${p.savedAt ? new Date(p.savedAt).toLocaleDateString() : 'New'}</div>
+        </div>
+        <div class="prof-actions">
+          <button class="prof-play" onclick="selectProfile('${p.id}')">▶ Play</button>
+          <button class="prof-del" onclick="deleteProfile('${p.id}')" title="Delete account">🗑</button>
+        </div>
+      </div>`).join('');
+  }
+  listEl.innerHTML += `<button class="prof-new-card" onclick="showCreateProfile()">＋ New Account</button>`;
+}
+
+function showCreateProfile() {
+  document.getElementById('profList').style.display = 'none';
+  document.getElementById('profCreate').style.display = 'flex';
+  document.getElementById('profNameInput').value = '';
+  document.getElementById('profNameInput').focus();
+}
+
+function cancelCreateProfile() {
+  document.getElementById('profList').style.display = 'flex';
+  document.getElementById('profCreate').style.display = 'none';
+}
+
+function confirmCreateProfile() {
+  const name = (document.getElementById('profNameInput').value || '').trim();
+  if (!name) { notify('Enter a name!', 'bad'); return; }
+  const id = 'p' + Date.now();
+  const profiles = getProfiles();
+  profiles.push({id, name, level: 1, coins: 200, savedAt: Date.now()});
+  saveProfiles(profiles);
+  setCurrentProfileId(id);
+  // Reset G state for a fresh account
+  Object.assign(G, {
+    coins: 200, level: 1, xp: 0, playerName: name,
+    currentVehicle: null, ownedVehicles: [], vehicleColors: {},
+    vehicleUpgrades: {}, vehicleCosmetics: {},
+    character: {type:'cam', shirt:'#e74c3c', pants:'#2c3e50', hat:'cap'},
+    stats: {racesWon:0, totalCoins:200, fastestLap:Infinity, crashes:0, rollovers:0, totalRaceTime:0},
+    raceConfig: {arena:0, difficulty:1, laps:3}, initialized: false,
+  });
+  document.getElementById('topBar').style.display = 'none';
+  showScreen('welcomeScreen');
+}
+
+function selectProfile(id) {
+  setCurrentProfileId(id);
+  if (loadGame()) {
+    document.getElementById('topBar').style.display = 'flex';
+    buildGarage(); buildShop(); buildLeaderboard(); buildArenaCards();
+    showScreen('menuScreen');
+    updateMenuDisplay();
+    notify('Welcome back, ' + G.playerName + '! 🏁', 'good');
+  } else {
+    // Profile entry exists but no save data — treat as new
+    const profiles = getProfiles();
+    const prof = profiles.find(p => p.id === id);
+    if (prof) {
+      Object.assign(G, {
+        coins: 200, level: 1, xp: 0, playerName: prof.name,
+        currentVehicle: null, ownedVehicles: [], vehicleColors: {},
+        vehicleUpgrades: {}, vehicleCosmetics: {},
+        character: {type:'cam', shirt:'#e74c3c', pants:'#2c3e50', hat:'cap'},
+        stats: {racesWon:0, totalCoins:200, fastestLap:Infinity, crashes:0, rollovers:0, totalRaceTime:0},
+        raceConfig: {arena:0, difficulty:1, laps:3}, initialized: false,
+      });
+    }
+    showScreen('welcomeScreen');
+  }
+}
+
+function deleteProfile(id) {
+  const profiles = getProfiles();
+  const prof = profiles.find(p => p.id === id);
+  if (!prof) return;
+  if (!confirm(`Delete account "${prof.name}"? All progress will be lost!`)) return;
+  localStorage.removeItem(getSaveKey(id));
+  saveProfiles(profiles.filter(p => p.id !== id));
+  if (getCurrentProfileId() === id) localStorage.removeItem('cc8c_current_profile');
+  buildProfileScreen();
+}
+
+function switchAccount() {
+  buildProfileScreen();
+  showScreen('profileScreen');
+}
+
 function saveGame(silent=true) {
   const save = {
     coins: G.coins, level: G.level, xp: G.xp, playerName: G.playerName,
@@ -772,12 +923,27 @@ function saveGame(silent=true) {
     stats: {...G.stats, fastestLap: G.stats.fastestLap === Infinity ? null : G.stats.fastestLap},
     initialized: G.initialized, _savedAt: Date.now(),
   };
-  localStorage.setItem('cc8c_save', JSON.stringify(save));
+  const key = getSaveKey(getCurrentProfileId() || 'legacy');
+  localStorage.setItem(key, JSON.stringify(save));
+  // Update profile summary for the account picker display
+  const pid = getCurrentProfileId();
+  if (pid && pid !== 'legacy') {
+    const profiles = getProfiles();
+    const prof = profiles.find(p => p.id === pid);
+    if (prof) {
+      prof.name = G.playerName;
+      prof.level = G.level;
+      prof.coins = G.coins;
+      prof.savedAt = Date.now();
+      saveProfiles(profiles);
+    }
+  }
   if (!silent) notify('Game saved! 💾', 'good');
 }
 
 function loadGame() {
-  const raw = localStorage.getItem('cc8c_save');
+  const key = getSaveKey(getCurrentProfileId() || 'legacy');
+  const raw = localStorage.getItem(key);
   if (!raw) return false;
   try {
     const save = JSON.parse(raw);
@@ -800,8 +966,9 @@ function loadGame() {
 }
 
 function resetGame() {
-  if (!confirm('Reset ALL progress? This cannot be undone!')) return;
-  localStorage.removeItem('cc8c_save');
+  if (!confirm('Reset ALL progress for this account? This cannot be undone!')) return;
+  const key = getSaveKey(getCurrentProfileId() || 'legacy');
+  localStorage.removeItem(key);
   location.reload();
 }
 
@@ -2808,10 +2975,10 @@ function addSnowmen() {
 
 function addLeafPiles() {
   const rng = mulberry32(86420);
-  const leafColors = [0xd4620a, 0xc43c0a, 0xe8a020, 0xb85c08, 0xdd8800];
+  const leafColors = [0xd4620a, 0xc43c0a, 0xe8a020, 0xb85c08, 0xdd8800, 0xe05010, 0xcc7700];
   const makeMat = () => new THREE.MeshLambertMaterial({color: leafColors[Math.floor(rng() * leafColors.length)]});
 
-  // Background decorative leaf mounds off the track
+  // Background decorative leaf mounds off the track — layered spheres for roundness
   for (let i = 0; i < 22; i++) {
     const angle = rng() * Math.PI * 2;
     const rad = 140 + rng() * 260;
@@ -2819,11 +2986,24 @@ function addLeafPiles() {
     const z = Math.sin(angle) * rad;
     const {dist} = nearestTrackT(x, z, 0);
     if (dist < TRACK_WIDTH / 2 + 18) continue;
-    const pile = new THREE.Mesh(new THREE.SphereGeometry(6 + rng() * 10, 7, 5), makeMat());
-    pile.position.set(x, -2, z);
-    pile.scale.set(1.6, 0.6, 1.3);
+    const r = 5 + rng() * 9;
+    const pile = new THREE.Mesh(new THREE.SphereGeometry(r, 9, 7), makeMat());
+    pile.position.set(x, -2.5, z);
+    pile.scale.set(1.5, 0.62, 1.3);
     pile.userData.sceneObj = true;
     scene.add(pile);
+    // 3-5 extra lumps per background pile for a natural clustered look
+    const extra = 3 + Math.floor(rng() * 3);
+    for (let j = 0; j < extra; j++) {
+      const sr = r * (0.3 + rng() * 0.5);
+      const ea = rng() * Math.PI * 2;
+      const ed = r * (0.5 + rng() * 0.65);
+      const lump = new THREE.Mesh(new THREE.SphereGeometry(sr, 7, 5), makeMat());
+      lump.position.set(x + Math.cos(ea) * ed, -2.5 + sr * 0.25, z + Math.sin(ea) * ed);
+      lump.scale.set(1.3, 0.58, 1.2);
+      lump.userData.sceneObj = true;
+      scene.add(lump);
+    }
   }
 
   // Scattered flat leaf patches on/near track for atmosphere
@@ -2845,43 +3025,67 @@ function addLeafPiles() {
     scene.add(patch);
   }
 
-  // Jump leaf piles ON the track — ramp shape like sand dunes
-  const rampColors = [0xc43c0a, 0xd4620a, 0xe8a020, 0xb85c08, 0xdd8800, 0xc05000];
+  // Jump leaf piles ON the track — round dome-shaped mounds built from sphere clusters
   const pileCount = 6;
   for (let i = 0; i < pileCount; i++) {
     const t = (i / pileCount) * Math.PI * 2 + 0.5 + rng() * 0.35;
     const pt = trackPoint(t);
     const tang = trackTangent(t);
-    const pileW = TRACK_WIDTH * 0.58;
-    const pileH = 4.5 + rng() * 3.5;
-    const pileD = 16 + rng() * 10;
-    const rampColor = rampColors[i % rampColors.length];
-    const ramp = new THREE.Mesh(
-      new THREE.BoxGeometry(pileW, pileH, pileD),
-      new THREE.MeshLambertMaterial({color: rampColor})
-    );
-    ramp.position.set(pt.x, pileH * 0.38, pt.z);
     const ang = Math.atan2(tang.x, tang.z);
-    ramp.rotation.y = ang;
-    ramp.rotation.x = -0.20;
-    ramp.userData.sceneObj = true;
-    ramp.castShadow = true;
-    scene.add(ramp);
-    // Small leaf clumps on top of each ramp for visual flair
-    for (let j = 0; j < 3; j++) {
-      const lump = new THREE.Mesh(
-        new THREE.SphereGeometry(1.5 + rng() * 1.5, 6, 4),
-        new THREE.MeshLambertMaterial({color: leafColors[Math.floor(rng() * leafColors.length)]})
-      );
-      lump.position.set(
-        pt.x + (rng() - 0.5) * pileW * 0.5,
-        pileH * 0.8 + rng() * 1.5,
-        pt.z + (rng() - 0.5) * pileD * 0.3
-      );
+    const pileW = TRACK_WIDTH * 0.62;
+    const pileH = 5 + rng() * 4;
+    const pileD = 15 + rng() * 9;
+
+    // Large central mound sphere — the main visual bulk
+    const mainR = pileH * 0.88;
+    const mainSphere = new THREE.Mesh(new THREE.SphereGeometry(mainR, 12, 9), makeMat());
+    mainSphere.position.set(pt.x, mainR * 0.48, pt.z);
+    mainSphere.scale.set(pileW / (mainR * 2) * 1.08, 0.82, pileD / (mainR * 2) * 0.92);
+    mainSphere.rotation.y = ang;
+    mainSphere.userData.sceneObj = true;
+    scene.add(mainSphere);
+
+    // Second overlapping mound slightly offset for more depth
+    const side2R = mainR * 0.75;
+    const side2 = new THREE.Mesh(new THREE.SphereGeometry(side2R, 10, 7), makeMat());
+    side2.position.set(
+      pt.x + Math.cos(ang + Math.PI * 0.5) * pileW * 0.18,
+      side2R * 0.55,
+      pt.z + Math.sin(ang + Math.PI * 0.5) * pileD * 0.15
+    );
+    side2.scale.set(1.05, 0.78, 1.0);
+    side2.userData.sceneObj = true;
+    scene.add(side2);
+
+    // Dense layer of medium leaf lumps packed over and around the pile (14-18 lumps)
+    const medCount = 14 + Math.floor(rng() * 5);
+    for (let j = 0; j < medCount; j++) {
+      const lr = 1.5 + rng() * 2.8;
+      const spreadAngle = rng() * Math.PI * 2;
+      const spreadR = rng() * pileW * 0.48;
+      const dOffset = (rng() - 0.5) * pileD * 0.38;
+      const heightFrac = rng() * rng(); // bias toward base (more dense low, a few on top)
+      const lx = pt.x + Math.cos(spreadAngle) * spreadR;
+      const lz = pt.z + Math.sin(spreadAngle) * spreadR * (pileD / pileW) + dOffset;
+      const lump = new THREE.Mesh(new THREE.SphereGeometry(lr, 8, 6), makeMat());
+      lump.position.set(lx, mainR * (0.15 + heightFrac * 1.05) + lr * 0.2, lz);
       lump.userData.sceneObj = true;
       scene.add(lump);
     }
-    jumpZones.push({x: pt.x, z: pt.z, r: pileD * 0.6, boost: 16 + pileH * 1.4});
+
+    // Small leaf clumps spilling around the base (10 lumps)
+    for (let j = 0; j < 10; j++) {
+      const lr = 0.75 + rng() * 1.4;
+      const bx = pt.x + (rng() - 0.5) * pileW * 1.6;
+      const bz = pt.z + (rng() - 0.5) * pileD * 0.95;
+      const lump = new THREE.Mesh(new THREE.SphereGeometry(lr, 7, 5), makeMat());
+      lump.position.set(bx, lr * 0.28, bz);
+      lump.scale.set(1.5, 0.48, 1.4);
+      lump.userData.sceneObj = true;
+      scene.add(lump);
+    }
+
+    jumpZones.push({x: pt.x, z: pt.z, r: pileD * 0.65, boost: 16 + pileH * 1.4});
   }
 }
 
@@ -4055,7 +4259,8 @@ function setChar(key, val) {
 function buildSettings() {
   const savedAt = (() => {
     try {
-      const raw = localStorage.getItem('cc8c_save');
+      const key = getSaveKey(getCurrentProfileId() || 'legacy');
+      const raw = localStorage.getItem(key);
       if (!raw) return null;
       const d = JSON.parse(raw)._savedAt;
       return d ? new Date(d).toLocaleString() : null;
@@ -4123,9 +4328,14 @@ function buildSettings() {
       </div>
     </div>
     <div class="set-section">
+      <div class="set-sec-title">🔀 Accounts</div>
+      <div style="font-size:.85em;color:#aaa;margin-bottom:12px">Switch between saved profiles or create a new one</div>
+      <button class="btn btn-sm" style="width:100%" onclick="switchAccount()">👤 Switch Account</button>
+    </div>
+    <div class="set-section">
       <div class="set-sec-title">⚠️ Danger Zone</div>
-      <div style="font-size:.8em;color:#888;margin-bottom:12px">Erases all progress permanently</div>
-      <button class="btn btn-sm btn-red" style="width:100%" onclick="resetGame()">🗑️ Reset All Data</button>
+      <div style="font-size:.8em;color:#888;margin-bottom:12px">Erases all progress for this account permanently</div>
+      <button class="btn btn-sm btn-red" style="width:100%" onclick="resetGame()">🗑️ Reset This Account</button>
     </div>
     <div style="height:20px"></div>
   `;
@@ -4190,7 +4400,6 @@ function formatTime(s) {
 // INIT
 // ==============================
 function init() {
-  // Simulate loading
   const bar = document.getElementById('loadBar');
   let pct = 0;
   const iv = setInterval(() => {
@@ -4204,17 +4413,41 @@ function init() {
           initThreeJS();
           buildStarterCards();
           document.querySelector('.diff-med').classList.add('sel');
-          if (loadGame()) {
+
+          // Migrate a legacy single save into the profile system
+          const legacyRaw = localStorage.getItem('cc8c_save');
+          const profiles = getProfiles();
+          if (legacyRaw && profiles.length === 0 && !getCurrentProfileId()) {
+            try {
+              const legacySave = JSON.parse(legacyRaw);
+              const legacyId = 'p' + Date.now();
+              localStorage.setItem(getSaveKey(legacyId), legacyRaw);
+              profiles.push({
+                id: legacyId,
+                name: legacySave.playerName || 'Player',
+                level: legacySave.level || 1,
+                coins: legacySave.coins || 0,
+                savedAt: legacySave._savedAt || Date.now(),
+              });
+              saveProfiles(profiles);
+              setCurrentProfileId(legacyId);
+              // Keep legacy key for a moment so loadGame() finds it — it's overwritten on next save
+            } catch(e) {}
+          }
+
+          const pid = getCurrentProfileId();
+          if (pid && loadGame()) {
             document.getElementById('topBar').style.display = 'flex';
-            buildGarage();
-            buildShop();
-            buildLeaderboard();
-            buildArenaCards();
+            buildGarage(); buildShop(); buildLeaderboard(); buildArenaCards();
             showScreen('menuScreen');
             updateMenuDisplay();
             notify('Welcome back, ' + G.playerName + '! 🏁', 'good');
+          } else if (getProfiles().length > 0) {
+            buildProfileScreen();
+            showScreen('profileScreen');
           } else {
-            showScreen('welcomeScreen');
+            buildProfileScreen();
+            showScreen('profileScreen');
           }
         }, 300);
       }, 400);
