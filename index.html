@@ -380,9 +380,18 @@ window._fbReady = () => FB_READY;
   <div class="prof-sub">Choose Your Account</div>
   <div class="prof-list" id="profList"></div>
   <div class="prof-create" id="profCreate" style="display:none">
-    <input type="text" class="prof-input" id="profNameInput" maxlength="20" placeholder="Enter your name..." onkeydown="if(event.key==='Enter')confirmCreateProfile()" />
+    <input type="text" class="prof-input" id="profNameInput" maxlength="20" placeholder="Enter your name..." />
+    <input type="password" class="prof-input" id="profPassInput" maxlength="64" placeholder="Set a password (optional)" />
+    <input type="password" class="prof-input" id="profPassConfirm" maxlength="64" placeholder="Confirm password" onkeydown="if(event.key==='Enter')confirmCreateProfile()" />
     <button class="btn" onclick="confirmCreateProfile()">Create Account</button>
     <button class="btn btn-sec" onclick="cancelCreateProfile()">← Back</button>
+  </div>
+  <div class="prof-create" id="profPassCheck" style="display:none">
+    <div style="color:#ccc;font-size:1em;text-align:center;margin-bottom:4px">🔒 Password required for</div>
+    <div style="color:#ff9944;font-weight:700;font-size:1.1em;text-align:center;margin-bottom:10px" id="profPassCheckName"></div>
+    <input type="password" class="prof-input" id="profPassCheckInput" maxlength="64" placeholder="Enter password..." onkeydown="if(event.key==='Enter')submitProfilePassword()" />
+    <button class="btn" onclick="submitProfilePassword()">Unlock 🔓</button>
+    <button class="btn btn-sec" onclick="cancelProfilePassword()">← Back</button>
   </div>
 </div>
 
@@ -814,17 +823,26 @@ function getSaveKey(id) {
   return id === 'legacy' ? 'cc8c_save' : 'cc8c_save_' + id;
 }
 
+async function hashPassword(pw) {
+  const enc = new TextEncoder();
+  const buf = await crypto.subtle.digest('SHA-256', enc.encode(pw));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+let _pendingProfileId = null;
+
 function buildProfileScreen() {
   const profiles = getProfiles();
   const listEl = document.getElementById('profList');
-  const createEl = document.getElementById('profCreate');
-  createEl.style.display = 'none';
+  document.getElementById('profCreate').style.display = 'none';
+  document.getElementById('profPassCheck').style.display = 'none';
+  listEl.style.display = 'flex';
   if (profiles.length === 0) {
     listEl.innerHTML = `<div style="text-align:center;color:#888;padding:20px">No accounts yet.<br>Create one below!</div>`;
   } else {
     listEl.innerHTML = profiles.map(p => `
       <div class="prof-card">
-        <div style="font-size:2em;flex-shrink:0">👤</div>
+        <div style="font-size:2em;flex-shrink:0">${p.passwordHash ? '🔒' : '👤'}</div>
         <div class="prof-info">
           <div class="prof-name">${p.name}</div>
           <div class="prof-meta">Level ${p.level || 1} · ${p.coins || 0} 🪙 · ${p.savedAt ? new Date(p.savedAt).toLocaleDateString() : 'New'}</div>
@@ -842,6 +860,8 @@ function showCreateProfile() {
   document.getElementById('profList').style.display = 'none';
   document.getElementById('profCreate').style.display = 'flex';
   document.getElementById('profNameInput').value = '';
+  document.getElementById('profPassInput').value = '';
+  document.getElementById('profPassConfirm').value = '';
   document.getElementById('profNameInput').focus();
 }
 
@@ -850,15 +870,19 @@ function cancelCreateProfile() {
   document.getElementById('profCreate').style.display = 'none';
 }
 
-function confirmCreateProfile() {
+async function confirmCreateProfile() {
   const name = (document.getElementById('profNameInput').value || '').trim();
   if (!name) { notify('Enter a name!', 'bad'); return; }
+  const pass = document.getElementById('profPassInput').value;
+  const conf = document.getElementById('profPassConfirm').value;
+  if (pass !== conf) { notify('Passwords do not match!', 'bad'); return; }
+  let passwordHash = null;
+  if (pass) passwordHash = await hashPassword(pass);
   const id = 'p' + Date.now();
   const profiles = getProfiles();
-  profiles.push({id, name, level: 1, coins: 200, savedAt: Date.now()});
+  profiles.push({id, name, level: 1, coins: 200, savedAt: Date.now(), passwordHash});
   saveProfiles(profiles);
   setCurrentProfileId(id);
-  // Reset G state for a fresh account
   Object.assign(G, {
     coins: 200, level: 1, xp: 0, playerName: name,
     currentVehicle: null, ownedVehicles: [], vehicleColors: {},
@@ -872,6 +896,46 @@ function confirmCreateProfile() {
 }
 
 function selectProfile(id) {
+  const profiles = getProfiles();
+  const prof = profiles.find(p => p.id === id);
+  if (prof && prof.passwordHash) {
+    _pendingProfileId = id;
+    document.getElementById('profPassCheckName').textContent = prof.name;
+    document.getElementById('profList').style.display = 'none';
+    document.getElementById('profPassCheck').style.display = 'flex';
+    document.getElementById('profPassCheckInput').value = '';
+    document.getElementById('profPassCheckInput').focus();
+    return;
+  }
+  _doSelectProfile(id);
+}
+
+async function submitProfilePassword() {
+  const pass = document.getElementById('profPassCheckInput').value;
+  const profiles = getProfiles();
+  const prof = profiles.find(p => p.id === _pendingProfileId);
+  if (!prof) return;
+  const hash = await hashPassword(pass);
+  if (hash !== prof.passwordHash) {
+    notify('Wrong password!', 'bad');
+    document.getElementById('profPassCheckInput').value = '';
+    document.getElementById('profPassCheckInput').focus();
+    return;
+  }
+  document.getElementById('profPassCheck').style.display = 'none';
+  document.getElementById('profList').style.display = 'flex';
+  const id = _pendingProfileId;
+  _pendingProfileId = null;
+  _doSelectProfile(id);
+}
+
+function cancelProfilePassword() {
+  _pendingProfileId = null;
+  document.getElementById('profPassCheck').style.display = 'none';
+  document.getElementById('profList').style.display = 'flex';
+}
+
+function _doSelectProfile(id) {
   setCurrentProfileId(id);
   if (loadGame()) {
     document.getElementById('topBar').style.display = 'flex';
@@ -880,7 +944,6 @@ function selectProfile(id) {
     updateMenuDisplay();
     notify('Welcome back, ' + G.playerName + '! 🏁', 'good');
   } else {
-    // Profile entry exists but no save data — treat as new
     const profiles = getProfiles();
     const prof = profiles.find(p => p.id === id);
     if (prof) {
@@ -1722,33 +1785,63 @@ function buildCarMesh(vehicleId, colorHex, cosmetics=[]) {
     frame.castShadow = true;
     g.add(frame);
 
-    // Gas tank
+    // Gas tank — rounded look with two overlapping boxes
     const tank = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.44, 1.5), bodyMat);
     tank.position.set(0, frameY + frameH / 2 + 0.22 - 0.05, -0.35);
     tank.castShadow = true;
     g.add(tank);
+    const tankTop = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.22, 1.2), bodyMat);
+    tankTop.position.set(0, frameY + frameH / 2 + 0.52, -0.35);
+    g.add(tankTop);
 
-    // Seat
-    const seat = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.16, 1.4), darkMat);
-    seat.position.set(0, frameY + frameH / 2 + 0.08, 0.55);
+    // Seat — padded look
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.2, 1.5), darkMat);
+    seat.position.set(0, frameY + frameH / 2 + 0.1, 0.65);
     g.add(seat);
+    const seatPad = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.1, 1.3), new THREE.MeshLambertMaterial({color:0x111111}));
+    seatPad.position.set(0, frameY + frameH / 2 + 0.22, 0.65);
+    g.add(seatPad);
 
-    // Front fairing
+    // Front fairing — layered for depth
     const fairing = new THREE.Mesh(new THREE.BoxGeometry(0.88, 1.0, 0.55), bodyMat);
     fairing.position.set(0, frameY + 0.4, fWheelZ + 0.7);
     fairing.castShadow = true;
     g.add(fairing);
+    // Side fairing wings
+    [-0.44, 0.44].forEach(fx => {
+      const sideFairing = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.72, 0.9), bodyMat);
+      sideFairing.position.set(fx, frameY + 0.1, fWheelZ + 0.95);
+      sideFairing.rotation.y = fx > 0 ? -0.18 : 0.18;
+      g.add(sideFairing);
+    });
+    // Belly pan under engine
+    const bellyPan = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.15, 2.0), bodyMat);
+    bellyPan.position.set(0, wRad + 0.18, -0.2);
+    g.add(bellyPan);
 
     // Windscreen
-    const windscreen = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.5, 0.08), glassMat);
-    windscreen.position.set(0, frameY + 1.15, fWheelZ + 0.46);
-    windscreen.rotation.x = -0.35;
+    const windscreen = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.55, 0.08), glassMat);
+    windscreen.position.set(0, frameY + 1.18, fWheelZ + 0.44);
+    windscreen.rotation.x = -0.38;
     g.add(windscreen);
 
-    // Handlebars
-    const handlebar = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.1, 0.1), darkMat);
-    handlebar.position.set(0, frameY + frameH / 2 + 0.72, fWheelZ + 0.52);
+    // Instrument cluster / dash
+    const dash = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.18, 0.28), darkMat);
+    dash.position.set(0, frameY + frameH / 2 + 0.62, fWheelZ + 0.56);
+    g.add(dash);
+    const screen = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.1, 0.14), new THREE.MeshLambertMaterial({color:0x00ccff, emissive:0x008888, emissiveIntensity:0.5}));
+    screen.position.set(0, frameY + frameH / 2 + 0.7, fWheelZ + 0.43);
+    g.add(screen);
+
+    // Handlebars with mirror stubs
+    const handlebar = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.1, 0.1), darkMat);
+    handlebar.position.set(0, frameY + frameH / 2 + 0.75, fWheelZ + 0.52);
     g.add(handlebar);
+    [-0.52, 0.52].forEach(mx => {
+      const mirror = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.14, 0.08), darkMat);
+      mirror.position.set(mx, frameY + frameH / 2 + 0.9, fWheelZ + 0.52);
+      g.add(mirror);
+    });
 
     // Front fork tubes
     [-0.17, 0.17].forEach(fx => {
@@ -1758,31 +1851,50 @@ function buildCarMesh(vehicleId, colorHex, cosmetics=[]) {
       g.add(fork);
     });
 
-    // Headlight
-    const hlMat = new THREE.MeshLambertMaterial({color:0xffffaa, emissive:0xffff88, emissiveIntensity:0.6});
-    const hl = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.12, 12), hlMat);
-    hl.rotation.x = Math.PI / 2;
-    hl.position.set(0, frameY + 0.08, fWheelZ - 0.06);
+    // Headlight — round lens with bezel
+    const hlMat = new THREE.MeshLambertMaterial({color:0xffffaa, emissive:0xffff88, emissiveIntensity:0.8});
+    const hl = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 8), hlMat);
+    hl.position.set(0, frameY + 0.12, fWheelZ - 0.08);
     g.add(hl);
+    const hlBezel = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.1, 12), darkMat);
+    hlBezel.rotation.x = Math.PI / 2;
+    hlBezel.position.set(0, frameY + 0.12, fWheelZ);
+    g.add(hlBezel);
 
-    // Taillight
-    const tlMat = new THREE.MeshLambertMaterial({color:0xff2200, emissive:0xff0000, emissiveIntensity:0.5});
-    const tl = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.16, 0.08), tlMat);
-    tl.position.set(0, frameY + 0.28, rWheelZ + 0.18);
+    // Taillight — round red lens
+    const tlMat = new THREE.MeshLambertMaterial({color:0xff2200, emissive:0xff0000, emissiveIntensity:0.7});
+    const tl = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 6), tlMat);
+    tl.position.set(0, frameY + 0.32, rWheelZ + 0.22);
     g.add(tl);
 
-    // Exhaust pipe — runs front-to-back along the right side
-    const exhPipe = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 2.6, 8), darkMat);
+    // Exhaust pipe with exit cap
+    const exhPipe = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 2.8, 8), darkMat);
     exhPipe.rotation.x = Math.PI / 2;
-    exhPipe.position.set(frameW / 2 + 0.06, wRad + 0.2, 0.45);
+    exhPipe.position.set(frameW / 2 + 0.08, wRad + 0.22, 0.5);
     g.add(exhPipe);
+    const exhCap = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.08, 0.2, 8), new THREE.MeshLambertMaterial({color:0x555555}));
+    exhCap.rotation.x = Math.PI / 2;
+    exhCap.position.set(frameW / 2 + 0.08, wRad + 0.22, 1.95);
+    g.add(exhCap);
+
+    // Swing arm (rear axle linkage)
+    const swingArm = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.2, 6), darkMat);
+    swingArm.rotation.x = Math.PI / 2;
+    swingArm.position.set(0, wRad + 0.28, 0.75);
+    g.add(swingArm);
+
+    // Rear shock absorber
+    const shock = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.9, 6), new THREE.MeshLambertMaterial({color:0xaaaaaa}));
+    shock.rotation.x = 0.55;
+    shock.position.set(0, wRad + 0.75, 1.0);
+    g.add(shock);
 
     // Rear fender
-    const rfender = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.1, 0.85), bodyMat);
-    rfender.position.set(0, wRad + 0.88, rWheelZ - 0.22);
+    const rfender = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.12, 1.0), bodyMat);
+    rfender.position.set(0, wRad + 0.9, rWheelZ - 0.25);
     g.add(rfender);
 
-    // 2 wheels
+    // 2 wheels with spokes
     const wheels = [];
     [{z: fWheelZ}, {z: rWheelZ}].forEach(ws => {
       const wg = new THREE.Group();
@@ -1790,9 +1902,20 @@ function buildCarMesh(vehicleId, colorHex, cosmetics=[]) {
       rim.rotation.z = Math.PI / 2;
       rim.castShadow = true;
       wg.add(rim);
-      const hub = new THREE.Mesh(new THREE.CylinderGeometry(wRad * 0.3, wRad * 0.3, wWidth + 0.05, 8), hubMat);
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(wRad * 0.28, wRad * 0.28, wWidth + 0.06, 8), hubMat);
       hub.rotation.z = Math.PI / 2;
       wg.add(hub);
+      // Spokes
+      for (let sp = 0; sp < 6; sp++) {
+        const ang = (sp / 6) * Math.PI * 2;
+        const spoke = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, wRad * 0.72, 4), hubMat);
+        spoke.rotation.z = ang;
+        spoke.position.set(Math.cos(ang + Math.PI/2) * wRad * 0.36, 0, Math.sin(ang + Math.PI/2) * wRad * 0.36);
+        // Note: spokes oriented along local Y which becomes radial when rotated
+        const spk = new THREE.Mesh(new THREE.BoxGeometry(0.04, wRad * 0.72, 0.04), hubMat);
+        spk.rotation.z = ang;
+        wg.add(spk);
+      }
       wg.position.set(0, wRad, ws.z);
       g.add(wg);
       wheels.push(wg);
@@ -1844,6 +1967,36 @@ function buildCarMesh(vehicleId, colorHex, cosmetics=[]) {
   bkw.position.set(0, bh + ch/2 + (cat==='Tractor' ? 1.1 : wr), cz + cl/2 + 0.05);
   g.add(bkw);
 
+  // Side windows on cabin
+  const cabinY = bh + ch/2 + (cat==='Tractor' ? 1.1 : wr);
+  [-cw/2 - 0.04, cw/2 + 0.04].forEach(wx => {
+    const sw = new THREE.Mesh(new THREE.BoxGeometry(0.07, ch*0.68, cl*0.72), glassMat);
+    sw.position.set(wx, cabinY, cz);
+    g.add(sw);
+  });
+
+  // Front grille — dark band below headlights
+  const grille = new THREE.Mesh(new THREE.BoxGeometry(bw*0.58, bh*0.42, 0.1), new THREE.MeshLambertMaterial({color:0x111111}));
+  grille.position.set(0, wr + bh*0.25, -bl/2 - 0.05);
+  g.add(grille);
+
+  // Rear bumper — matching front
+  const rbump = new THREE.Mesh(new THREE.BoxGeometry(bw+0.2, 0.5, 0.4), darkMat);
+  rbump.position.set(0, wr + 0.25, bl/2 + 0.2);
+  g.add(rbump);
+
+  // Side mirrors on cabin
+  if (cat !== 'Tractor') {
+    [-cw/2 - 0.22, cw/2 + 0.22].forEach(mx => {
+      const mirrorArm = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.06, 0.06), darkMat);
+      mirrorArm.position.set(mx, cabinY + ch*0.28, cz - cl*0.38);
+      g.add(mirrorArm);
+      const mirrorFace = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.22, 0.16), darkMat);
+      mirrorFace.position.set(mx, cabinY + ch*0.3, cz - cl*0.42);
+      g.add(mirrorFace);
+    });
+  }
+
   // Tractor hood (engine block at the front, local -Z side)
   if (cat === 'Tractor') {
     const hoodH = bh * 0.55;
@@ -1858,20 +2011,29 @@ function buildCarMesh(vehicleId, colorHex, cosmetics=[]) {
   fbump.position.set(0, wr + 0.25, -bl/2 - 0.2);
   g.add(fbump);
 
-  // Headlights
-  const hlMat = new THREE.MeshLambertMaterial({color:0xffffaa, emissive:0xffff88, emissiveIntensity:0.5});
+  // Headlights — round lens with dark bezel ring
+  const hlMat = new THREE.MeshLambertMaterial({color:0xffffcc, emissive:0xffff99, emissiveIntensity:0.7});
+  const hlBezelMat = new THREE.MeshLambertMaterial({color:0x111111});
   [-bw/2+0.5, bw/2-0.5].forEach(lx => {
-    const hl = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.3, 0.1), hlMat);
-    hl.position.set(lx, wr + bh*0.6, -bl/2 - 0.05);
+    const hl = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 7), hlMat);
+    hl.position.set(lx, wr + bh*0.6, -bl/2 - 0.04);
     g.add(hl);
+    const bezel = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.1, 12), hlBezelMat);
+    bezel.rotation.x = Math.PI/2;
+    bezel.position.set(lx, wr + bh*0.6, -bl/2 + 0.02);
+    g.add(bezel);
   });
 
-  // Taillights
-  const tlMat = new THREE.MeshLambertMaterial({color:0xff2200, emissive:0xff0000, emissiveIntensity:0.4});
+  // Taillights — round red lens
+  const tlMat = new THREE.MeshLambertMaterial({color:0xff1100, emissive:0xff0000, emissiveIntensity:0.6});
   [-bw/2+0.5, bw/2-0.5].forEach(lx => {
-    const tl = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.3, 0.1), tlMat);
-    tl.position.set(lx, wr + bh*0.6, bl/2 + 0.05);
+    const tl = new THREE.Mesh(new THREE.SphereGeometry(0.19, 8, 6), tlMat);
+    tl.position.set(lx, wr + bh*0.6, bl/2 + 0.04);
     g.add(tl);
+    const tlBezel = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.23, 0.1, 10), hlBezelMat);
+    tlBezel.rotation.x = Math.PI/2;
+    tlBezel.position.set(lx, wr + bh*0.6, bl/2 - 0.02);
+    g.add(tlBezel);
   });
 
   // Wheels
@@ -1903,6 +2065,22 @@ function buildCarMesh(vehicleId, colorHex, cosmetics=[]) {
     wheels.push(wg);
   });
   g.userData.wheels = wheels;
+
+  // Wheel arch fenders — body-colored panel covering top of each wheel
+  wheelSpec.forEach(ws => {
+    const archR = (ws.r || wr) + 0.28;
+    const archH = archR * 0.52;
+    const archD = archR * 1.85;
+    const fenderW = ww + 0.55;
+    const arch = new THREE.Mesh(new THREE.BoxGeometry(fenderW, archH, archD), bodyMat);
+    arch.position.set(ws.x, (ws.r || wr) + archH * 0.54, ws.z);
+    g.add(arch);
+    // Rounded outer edge of arch using a half-cylinder strip
+    const strip = new THREE.Mesh(new THREE.CylinderGeometry(archR, archR, fenderW, 14, 1, true, Math.PI * 0.08, Math.PI * 0.84), bodyMat);
+    strip.rotation.z = Math.PI / 2;
+    strip.position.set(ws.x, ws.r || wr, ws.z);
+    g.add(strip);
+  });
 
   // Exhaust pipe for tractors
   if (cat === 'Tractor') {
@@ -3176,7 +3354,7 @@ function startRace() {
             ? ['offroad','pickup','muscle','rally','compact','sports']
             : ['muscle','rally','moto','pickup','compact','offroad'];
   const aiColors = ['#e74c3c','#3498db','#f39c12','#9b59b6'];
-  const diffMults = [0.58, 0.72, 0.88, 1.02];
+  const diffMults = [0.58, 0.72, 1.08, 1.32];
   const aiMult = diffMults[diff];
 
   for (let i=0;i<4;i++) {
@@ -3790,7 +3968,11 @@ function startGame() {
 function buildArenaCards() {
   const container = document.getElementById('arenaCards');
   container.innerHTML = '';
-  ARENAS.forEach((ar, idx) => {
+  // Practice (5) shown first, then all others in order
+  const displayOrder = [5, 0, 1, 2, 3, 4, 6, 7];
+  let firstUnlocked = true;
+  displayOrder.forEach(idx => {
+    const ar = ARENAS[idx];
     const levelLocked = G.level < ar.lock;
     const tireLevel = G.initialized ? getVehicleUpgrades(G.currentVehicle).wheels : 0;
     const tireLocked = ar.tireLock && tireLevel < 10;
@@ -3803,19 +3985,20 @@ function buildArenaCards() {
       : mudLocked ? `🚜🔥 Tractor or Monster Truck + Tires Lvl 5${isMudOk ? ` (${tireLevel}/5)` : ''}`
       : '';
     const card = document.createElement('div');
-    card.className = 'arena-card' + (idx===0?' sel':'') + (locked?' locked':'');
+    const isFirst = firstUnlocked && !locked;
+    card.className = 'arena-card' + (isFirst ? ' sel' : '') + (locked ? ' locked' : '');
     card.innerHTML = `
       <span class="ar-icon">${ar.emoji}</span>
       <div class="ar-name">${ar.name}</div>
       <div class="ar-lock">${locked ? lockMsg : ar.desc}</div>
     `;
     if (!locked) {
+      if (firstUnlocked) { G.raceConfig.arena = idx; firstUnlocked = false; }
       card.addEventListener('click', () => {
         document.querySelectorAll('.arena-card').forEach(c=>c.classList.remove('sel'));
         card.classList.add('sel');
         G.raceConfig.arena = idx;
       });
-      if (idx===0) G.raceConfig.arena = 0;
     }
     container.appendChild(card);
   });
